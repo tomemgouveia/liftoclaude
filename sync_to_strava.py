@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Upload a strength workout (in the JSON shape below) to Strava as a
 WeightTraining activity with structured per-set data.
@@ -40,6 +39,7 @@ Input JSON shape (see sample_workout.json):
    actually default to "Only You", set that as your account-wide
    default in the Strava app: Settings > Privacy Controls > Activities.
 """
+
 import argparse
 import json
 import os
@@ -95,14 +95,18 @@ def build_strava_payload(workout: dict) -> dict:
     for exercise in workout["exercises"]:
         ex_type = exercise_type_for(exercise["name"])
         for s in exercise["sets"]:
-            sets.append({
-                "exercise_type": ex_type,
-                "repetitions": s["reps"],
-                "weight": s["weight_kg"],
-                "start_time": workout["start_time"],
-            })
+            sets.append(
+                {
+                    "exercise_type": ex_type,
+                    "repetitions": s["reps"],
+                    "weight": s["weight_kg"],
+                    "start_time": workout["start_time"],
+                }
+            )
     return {
+        "version": "1.0",
         "start_time": workout["start_time"],
+        "utc_offset": workout.get("utc_offset", 0),
         "elapsed_time": workout["elapsed_time"],
         "sets": sets,
     }
@@ -128,8 +132,13 @@ def refresh_access_token(client_id: str, client_secret: str, refresh_token: str)
 
 def upload_activity(access_token: str, workout: dict, sport_type: str) -> dict:
     payload = build_strava_payload(workout)
+    # Strava dedupes uploads by external_id (derived from the filename here):
+    # a fixed name like "workout.json" makes a retry return the *cached*
+    # result of the very first attempt instead of reprocessing new content.
+    # Keep this unique per upload (start_time is good enough).
+    filename = f"liftosaur-{workout['start_time'].replace(':', '')}.json"
     files = {
-        "file": ("workout.json", json.dumps(payload), "application/json"),
+        "file": (filename, json.dumps(payload), "application/json"),
     }
     data = {
         "data_type": "json",
@@ -161,8 +170,10 @@ def poll_upload(access_token: str, upload_id: int, timeout_s: int = 30) -> dict:
         if status.get("activity_id"):
             return status
         time.sleep(1)
-    raise TimeoutError("Upload didn't finish processing in time — check "
-                        "strava.com manually, it may still complete.")
+    raise TimeoutError(
+        "Upload didn't finish processing in time — check "
+        "strava.com manually, it may still complete."
+    )
 
 
 def set_muted(access_token: str, activity_id: int, muted: bool) -> None:
@@ -175,17 +186,28 @@ def set_muted(access_token: str, activity_id: int, muted: bool) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("workout_file", help="Path to a workout JSON file")
-    parser.add_argument("--sport-type", default="WeightTraining",
-                         help="Strava sport_type (default: WeightTraining)")
-    parser.add_argument("--public", action="store_true",
-                         help="Don't mute the activity from home feed "
-                              "(default: muted). This does NOT make it "
-                              "fully public — see module docstring.")
-    parser.add_argument("--dry-run", action="store_true",
-                         help="Build and print the payload without "
-                              "calling Strava or requiring credentials.")
+    parser.add_argument(
+        "--sport-type",
+        default="WeightTraining",
+        help="Strava sport_type (default: WeightTraining)",
+    )
+    parser.add_argument(
+        "--public",
+        action="store_true",
+        help="Don't mute the activity from home feed "
+        "(default: muted). This does NOT make it "
+        "fully public — see module docstring.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Build and print the payload without "
+        "calling Strava or requiring credentials.",
+    )
     args = parser.parse_args()
 
     with open(args.workout_file) as f:
@@ -195,16 +217,21 @@ def main():
 
     if args.dry_run:
         print("Would upload the following to Strava (--dry-run, nothing sent):\n")
-        print(json.dumps({
-            "form_fields": {
-                "data_type": "json",
-                "sport_type": args.sport_type,
-                "name": workout.get("name", "Strength Workout"),
-                "description": workout.get("description", ""),
-            },
-            "file_content": payload,
-            "hide_from_home_after_upload": not args.public,
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "form_fields": {
+                        "data_type": "json",
+                        "sport_type": args.sport_type,
+                        "name": workout.get("name", "Strength Workout"),
+                        "description": workout.get("description", ""),
+                    },
+                    "file_content": payload,
+                    "hide_from_home_after_upload": not args.public,
+                },
+                indent=2,
+            )
+        )
         return
 
     load_dotenv(ENV_PATH)
@@ -233,10 +260,12 @@ def main():
 
     print(f"\nDone: https://www.strava.com/activities/{activity_id}")
     if not args.public:
-        print("Note: hide_from_home only mutes it from feeds — it is not "
-              "the same as 'Only You' visibility. Set your account's "
-              "default activity privacy to 'Only You' in Strava's app "
-              "settings if you want that guarantee (see README).")
+        print(
+            "Note: hide_from_home only mutes it from feeds — it is not "
+            "the same as 'Only You' visibility. Set your account's "
+            "default activity privacy to 'Only You' in Strava's app "
+            "settings if you want that guarantee (see README)."
+        )
 
 
 if __name__ == "__main__":

@@ -1,3 +1,6 @@
 .env
 .env.example
 .venv/
+*.pyc
+.ruff_cache
+.DS_Store

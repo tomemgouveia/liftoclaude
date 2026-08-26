@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 One-time Strava OAuth authorization.
 
@@ -11,9 +10,11 @@ Run this once to get a refresh token. It:
 Requires STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET to already be set in
 .env (get these by creating an app at https://www.strava.com/settings/api).
 """
+
 import os
 import re
 import sys
+
 import requests
 from dotenv import load_dotenv, set_key
 
@@ -25,8 +26,10 @@ REDIRECT_URI = "http://localhost/exchange_token"
 
 def main():
     if not os.path.exists(ENV_PATH):
-        print(f"No .env found. Copy .env.example to .env and fill in "
-              f"STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET first.")
+        print(
+            "No .env found. Copy .env.example to .env and fill in "
+            "STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET first."
+        )
         sys.exit(1)
 
     load_dotenv(ENV_PATH)
@@ -48,10 +51,13 @@ def main():
 
     print("1. Open this URL in a browser and authorize the app:\n")
     print(f"   {auth_url}\n")
-    print("2. Strava will redirect to a localhost URL that won't load "
-          "(that's expected).")
-    print("   Copy the full redirected URL, or just the 'code=' value "
-          "from it, and paste it below.\n")
+    print(
+        "2. Strava will redirect to a localhost URL that won't load (that's expected)."
+    )
+    print(
+        "   Copy the full redirected URL, or just the 'code=' value "
+        "from it, and paste it below.\n"
+    )
 
     raw = input("Paste the redirect URL or code: ").strip()
 
@@ -67,17 +73,38 @@ def main():
             "grant_type": "authorization_code",
         },
     )
-    resp.raise_for_status()
+    if not resp.ok:
+        print(f"\nStrava rejected the token exchange (HTTP {resp.status_code}):")
+        print(f"   {resp.text}\n")
+        print("Common causes:")
+        print(
+            "  - The code was already used, or the page sat open too long "
+            "(codes are single-use and expire quickly). Re-run this script "
+            "to get a fresh authorization URL and code."
+        )
+        print(
+            "  - STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET in .env don't match "
+            "the app you authorized against at "
+            "https://www.strava.com/settings/api."
+        )
+        print(
+            "  - Only part of the code was pasted (make sure you copied the "
+            "full 'code=' value, not truncated by the terminal)."
+        )
+        sys.exit(1)
     tokens = resp.json()
 
     refresh_token = tokens["refresh_token"]
     set_key(ENV_PATH, "STRAVA_REFRESH_TOKEN", refresh_token)
 
     athlete = tokens.get("athlete", {})
-    print(f"\nAuthorized as {athlete.get('firstname', '')} "
-          f"{athlete.get('lastname', '')}.")
-    print("Refresh token saved to .env. You're set — run sync_to_strava.py "
-          "whenever you want to sync a workout.")
+    print(
+        f"\nAuthorized as {athlete.get('firstname', '')} {athlete.get('lastname', '')}."
+    )
+    print(
+        "Refresh token saved to .env. You're set — run sync_to_strava.py "
+        "whenever you want to sync a workout."
+    )
 
 
 if __name__ == "__main__":
