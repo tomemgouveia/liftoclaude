@@ -45,6 +45,7 @@ import json
 import os
 import sys
 import time
+import uuid
 
 import requests
 from dotenv import load_dotenv, set_key
@@ -57,29 +58,42 @@ ENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
 # or come back "Unknown" in the app. Anything not in this map falls back
 # to an automatic upper-snake-case of the name, which frequently works
 # for simple single-word lifts but not for everything (see caveat above).
+#
+# IMPORTANT: Strava's exercise_type isn't the exercise *category* (e.g.
+# "SQUAT", "BENCH_PRESS") — it's a specific leaf value from the FIT SDK's
+# per-category exercise_name enum (e.g. category "squat" contains leaf
+# values like BARBELL_BACK_SQUAT, FRONT_SQUAT, GOBLET_SQUAT, ...). Sending
+# the bare category name doesn't error, it just silently renders as
+# "Unknown" in the app AND breaks per-exercise grouping of sets (each set
+# shows up as its own single-set "Unknown" entry instead of being merged).
+# Entries below marked "verified" were checked against the FIT SDK's
+# published exercise_name enum (github.com/dtcooper/python-fitparse
+# fitparse/profile.py); "unverified" entries are still just guesses like
+# the original map — if one comes back "Unknown", look up the real leaf
+# value for that category before assuming the guess is right.
 EXERCISE_TYPE_MAP = {
-    "Squat": "SQUAT",
-    "Front Squat": "FRONT_SQUAT",
-    "Bench Press": "BENCH_PRESS",
-    "Incline Bench Press": "INCLINE_BENCH_PRESS",
-    "Overhead Press": "SHOULDER_PRESS",
-    "Shoulder Press": "SHOULDER_PRESS",
-    "Deadlift": "DEADLIFT",
-    "Romanian Deadlift": "ROMANIAN_DEADLIFT",
-    "Pendlay Row": "BENT_OVER_ROW",
-    "Bent Over Row": "BENT_OVER_ROW",
-    "Seated Row": "SEATED_CABLE_ROW",
-    "Lat Pulldown": "LAT_PULLDOWN",
-    "Bicep Curl": "DUMBBELL_BICEPS_CURL",
-    "Hammer Curl": "HAMMER_CURL",
-    "Triceps Pushdown": "TRICEPS_PUSHDOWN",
-    "Skullcrusher": "LYING_TRICEPS_EXTENSION",
-    "Leg Press": "LEG_PRESS",
-    "Standing Calf Raise": "STANDING_CALF_RAISE",
-    "Cable Crunch": "CABLE_CRUNCH",
-    "Hanging Leg Raise": "HANGING_LEG_RAISE",
-    "Face Pull": "FACE_PULL",
-    "Lateral Raise": "LATERAL_RAISE",
+    "Squat": "BARBELL_BACK_SQUAT",  # verified
+    "Front Squat": "BARBELL_FRONT_SQUAT",  # verified
+    "Bench Press": "BARBELL_BENCH_PRESS",  # verified
+    "Incline Bench Press": "INCLINE_BARBELL_BENCH_PRESS",  # verified
+    "Overhead Press": "OVERHEAD_BARBELL_PRESS",  # verified
+    "Shoulder Press": "SMITH_MACHINE_OVERHEAD_PRESS",  # verified (BARBELL_SHOULDER_PRESS renders Unknown despite being in the FIT SDK enum)
+    "Deadlift": "BARBELL_DEADLIFT",  # verified
+    "Romanian Deadlift": "ROMANIAN_DEADLIFT",  # unverified
+    "Pendlay Row": "BENT_OVER_ROW",  # confirmed working via a real upload
+    "Bent Over Row": "BENT_OVER_ROW",  # confirmed working via a real upload
+    "Seated Row": "SEATED_CABLE_ROW",  # verified
+    "Lat Pulldown": "LAT_PULLDOWN",  # verified
+    "Bicep Curl": "STANDING_DUMBBELL_BICEPS_CURL",  # verified
+    "Hammer Curl": "DUMBBELL_HAMMER_CURL",  # verified
+    "Triceps Pushdown": "TRICEPS_PRESSDOWN",  # verified (Strava/FIT calls it "pressdown", not "pushdown")
+    "Skullcrusher": "LYING_TRICEPS_EXTENSION",  # unverified
+    "Leg Press": "LEG_PRESS",  # verified
+    "Standing Calf Raise": "STANDING_CALF_RAISE",  # unverified
+    "Cable Crunch": "CABLE_CRUNCH",  # unverified
+    "Hanging Leg Raise": "HANGING_LEG_RAISE",  # unverified
+    "Face Pull": "FACE_PULL",  # verified
+    "Lateral Raise": "LATERAL_RAISE",  # unverified
 }
 
 
@@ -134,9 +148,16 @@ def upload_activity(access_token: str, workout: dict, sport_type: str) -> dict:
     payload = build_strava_payload(workout)
     # Strava dedupes uploads by external_id (derived from the filename here):
     # a fixed name like "workout.json" makes a retry return the *cached*
-    # result of the very first attempt instead of reprocessing new content.
-    # Keep this unique per upload (start_time is good enough).
-    filename = f"liftosaur-{workout['start_time'].replace(':', '')}.json"
+    # result of a previous attempt instead of reprocessing new content —
+    # and that includes a since-deleted activity, whose upload record
+    # permanently reports no error and no activity_id (poll_upload just
+    # times out against it). Deriving external_id from start_time alone
+    # isn't enough since a retry of the same workout hits this too — use
+    # a random component so every upload attempt gets its own record.
+    filename = (
+        f"liftosaur-{workout['start_time'].replace(':', '')}"
+        f"-{uuid.uuid4().hex[:8]}.json"
+    )
     files = {
         "file": (filename, json.dumps(payload), "application/json"),
     }
@@ -171,8 +192,9 @@ def poll_upload(access_token: str, upload_id: int, timeout_s: int = 30) -> dict:
             return status
         time.sleep(1)
     raise TimeoutError(
-        "Upload didn't finish processing in time — check "
-        "strava.com manually, it may still complete."
+        f"Upload didn't finish processing in time (last status: "
+        f"{status.get('status')!r}) — check strava.com manually, it may "
+        f"still complete."
     )
 
 

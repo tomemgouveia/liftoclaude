@@ -1,0 +1,56 @@
+{
+  "name": "Upper/Lower Cut - Upper",
+  "start_time": "2026-08-25T17:00:00Z",
+  "elapsed_time": 3300,
+  "description": "Synced from Liftosaur",
+  "exercises": [
+    {
+      "name": "Bench Press",
+      "sets": [
+        {"reps": 6, "weight_kg": 40},
+        {"reps": 6, "weight_kg": 40},
+        {"reps": 6, "weight_kg": 40}
+      ]
+    },
+    {
+      "name": "Pendlay Row",
+      "sets": [
+        {"reps": 8, "weight_kg": 40},
+        {"reps": 8, "weight_kg": 40},
+        {"reps": 8, "weight_kg": 40}
+      ]
+    },
+    {
+      "name": "Lat Pulldown",
+      "sets": [
+        {"reps": 10, "weight_kg": 32.5},
+        {"reps": 10, "weight_kg": 32.5},
+        {"reps": 10, "weight_kg": 32.5}
+      ]
+    },
+    {
+      "name": "Shoulder Press",
+      "sets": [
+        {"reps": 8, "weight_kg": 20},
+        {"reps": 8, "weight_kg": 20},
+        {"reps": 8, "weight_kg": 20}
+      ]
+    },
+    {
+      "name": "Bicep Curl",
+      "sets": [
+        {"reps": 10, "weight_kg": 9},
+        {"reps": 10, "weight_kg": 9},
+        {"reps": 10, "weight_kg": 9}
+      ]
+    },
+    {
+      "name": "Triceps Pushdown",
+      "sets": [
+        {"reps": 10, "weight_kg": 15},
+        {"reps": 10, "weight_kg": 15},
+        {"reps": 10, "weight_kg": 15}
+      ]
+    }
+  ]
+}

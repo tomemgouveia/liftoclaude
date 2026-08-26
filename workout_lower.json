@@ -1,0 +1,55 @@
+{
+  "name": "Upper/Lower Cut - Lower",
+  "start_time": "2026-08-26T17:00:00Z",
+  "elapsed_time": 3600,
+  "description": "Synced from Liftosaur",
+  "exercises": [
+    {
+      "name": "Squat",
+      "sets": [
+        {"reps": 5, "weight_kg": 60},
+        {"reps": 5, "weight_kg": 60},
+        {"reps": 5, "weight_kg": 60}
+      ]
+    },
+    {
+      "name": "Deadlift",
+      "sets": [
+        {"reps": 5, "weight_kg": 45},
+        {"reps": 5, "weight_kg": 45}
+      ]
+    },
+    {
+      "name": "Leg Press",
+      "sets": [
+        {"reps": 10, "weight_kg": 60},
+        {"reps": 10, "weight_kg": 60},
+        {"reps": 10, "weight_kg": 60}
+      ]
+    },
+    {
+      "name": "Standing Calf Raise",
+      "sets": [
+        {"reps": 12, "weight_kg": 17.5},
+        {"reps": 12, "weight_kg": 17.5},
+        {"reps": 12, "weight_kg": 17.5}
+      ]
+    },
+    {
+      "name": "Hanging Leg Raise",
+      "sets": [
+        {"reps": 12, "weight_kg": 0},
+        {"reps": 12, "weight_kg": 0},
+        {"reps": 12, "weight_kg": 0}
+      ]
+    },
+    {
+      "name": "Cable Crunch",
+      "sets": [
+        {"reps": 12, "weight_kg": 12.5},
+        {"reps": 12, "weight_kg": 12.5},
+        {"reps": 12, "weight_kg": 12.5}
+      ]
+    }
+  ]
+}
