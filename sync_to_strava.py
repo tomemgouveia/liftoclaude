@@ -92,7 +92,7 @@ EXERCISE_TYPE_MAP = {
     "Standing Calf Raise": "STANDING_CALF_RAISE",  # unverified
     "Cable Crunch": "CABLE_CRUNCH",  # unverified
     "Hanging Leg Raise": "HANGING_LEG_RAISE",  # unverified
-    "Side Bend": "WEIGHTED_SIDE_BEND",  # verified (dumbbell/weighted variant; plain SIDE_BEND is bodyweight, CABLE_SIDE_BEND is the cable-machine variant)
+    "Side Bend": "DUMBBELL_SIDE_BEND",  # confirmed via a real upload (activity 19939855283) — WEIGHTED_SIDE_BEND rendered "Unknown"; user fixed it in-app to "Dumbbell Side Bend"
     "Face Pull": "FACE_PULL",  # verified
     "Lateral Raise": "LATERAL_RAISE",  # unverified
 }
