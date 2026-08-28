@@ -92,6 +92,7 @@ EXERCISE_TYPE_MAP = {
     "Standing Calf Raise": "STANDING_CALF_RAISE",  # unverified
     "Cable Crunch": "CABLE_CRUNCH",  # unverified
     "Hanging Leg Raise": "HANGING_LEG_RAISE",  # unverified
+    "Side Bend": "WEIGHTED_SIDE_BEND",  # verified (dumbbell/weighted variant; plain SIDE_BEND is bodyweight, CABLE_SIDE_BEND is the cable-machine variant)
     "Face Pull": "FACE_PULL",  # verified
     "Lateral Raise": "LATERAL_RAISE",  # unverified
 }

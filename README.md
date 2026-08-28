@@ -1,7 +1,20 @@
 # Liftosaur → Strava sync
 
-Pushes a Liftosaur workout to Strava as a structured Weight Training
-activity (proper exercises/sets/reps/weight, not just a generic entry).
+Syncs a strength workout logged in [Liftosaur](https://www.liftosaur.com/)
+to Strava as a structured Weight Training activity — real
+exercises/sets/reps/weight, not just a generic "workout" entry with a
+duration.
+
+**Why this exists:** Strava's official MCP connector is read-only —
+there's no way to get a workout *into* Strava through it. This project
+is the missing write path: it pulls a session from Liftosaur and
+uploads it via Strava's undocumented JSON activity-upload format.
+
+**A note on that format:** Strava has not published a schema for the
+JSON upload payload or the `exercise_type` values it accepts for
+strength activities. Everything this script does around that shape
+(see `sync_to_strava.py`) is reverse-engineered from observed behavior,
+not official docs — it may drift as Strava changes things.
 
 ## Setup (one-time)
 
