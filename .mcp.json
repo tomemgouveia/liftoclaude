@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "liftosaur": {
+      "type": "http",
+      "url": "https://www.liftosaur.com/mcp"
+    }
+  }
+}
