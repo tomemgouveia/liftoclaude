@@ -3,9 +3,9 @@ Upload a strength workout (in the JSON shape below) to Strava as a
 WeightTraining activity with structured per-set data.
 
 Usage:
-    python sync_to_strava.py workout.json
-    python sync_to_strava.py workout.json --public
-    python sync_to_strava.py workout.json --dry-run
+    python sync_to_strava.py workouts/2026-08-24T165602Z-fierce-5-workout-a.json
+    python sync_to_strava.py workouts/2026-08-24T165602Z-fierce-5-workout-a.json --public
+    python sync_to_strava.py workouts/2026-08-24T165602Z-fierce-5-workout-a.json --dry-run
 
 Input JSON shape (see sample_workout.json):
 {

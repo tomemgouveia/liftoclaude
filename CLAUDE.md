@@ -6,7 +6,7 @@ yesterday's workout to Strava", "sync my last session"):
 1. Use the Liftosaur MCP tools (`get_history` or `get_history_record`)
    to fetch the relevant workout. Match by date if the user gave one.
 
-2. Convert it into a `workout.json` file matching this shape:
+2. Convert it into a JSON file matching this shape:
 
    ```json
    {
@@ -24,10 +24,21 @@ yesterday's workout to Strava", "sync my last session"):
    user actually logged), not the `warmup:` or `target:` sets from the
    Liftohistory record — those aren't working sets.
 
-3. Run the script:
+   Save it into the `workouts/` directory (create it if it doesn't
+   exist yet) rather than overwriting a shared file, so every synced
+   workout is kept as its own record. Name it from the record's
+   `start_time` plus a slug of `name`:
 
    ```
-   python sync_to_strava.py workout.json
+   workouts/<start_time, colons stripped>-<slugified name>.json
+   ```
+
+   e.g. `workouts/2026-08-24T165602Z-fierce-5-workout-a.json`.
+
+3. Run the script against that file:
+
+   ```
+   python sync_to_strava.py workouts/<the file you just wrote>.json
    ```
 
    By default this mutes the activity from Strava's home feed

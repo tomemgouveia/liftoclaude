@@ -63,7 +63,10 @@ and just ask it to sync a workout — it'll pull the data from your
 connected Liftosaur MCP, shape it into the JSON this script expects,
 and run the upload for you.
 
-You can also build/edit a `workout.json` by hand — see
+Each synced workout is written to `workouts/` as its own timestamped
+file (e.g. `workouts/2026-08-24T165602Z-fierce-5-workout-a.json`)
+rather than overwriting a single shared file, so past syncs stay
+around as a record. You can also build/edit one by hand — see
 `sample_workout.json` for the shape.
 
 ## Privacy — please read
