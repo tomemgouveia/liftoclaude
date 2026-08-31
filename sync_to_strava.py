@@ -43,6 +43,7 @@ Input JSON shape (see sample_workout.json):
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import uuid
@@ -90,6 +91,7 @@ EXERCISE_TYPE_MAP = {
     "Skullcrusher": "LYING_TRICEPS_EXTENSION",  # unverified
     "Leg Press": "LEG_PRESS",  # verified
     "Standing Calf Raise": "STANDING_CALF_RAISE",  # unverified
+    "Standing Calf Raise, Cable": "STANDING_CALF_RAISE",  # confirmed via a real upload (activity 19977181952) — the untrimmed ", Cable" equipment suffix isn't in this map and the old fallback left a comma in the enum value, which rendered "Unknown"; user fixed it in-app to "Standing Calf Raise"
     "Cable Crunch": "CABLE_CRUNCH",  # unverified
     "Hanging Leg Raise": "HANGING_LEG_RAISE",  # unverified
     "Side Bend": "DUMBBELL_SIDE_BEND",  # confirmed via a real upload (activity 19939855283) — WEIGHTED_SIDE_BEND rendered "Unknown"; user fixed it in-app to "Dumbbell Side Bend"
@@ -101,7 +103,12 @@ EXERCISE_TYPE_MAP = {
 def exercise_type_for(name: str) -> str:
     if name in EXERCISE_TYPE_MAP:
         return EXERCISE_TYPE_MAP[name]
-    return name.strip().upper().replace(" ", "_").replace("-", "_")
+    # Fallback: normalise any run of non-alphanumeric characters (spaces,
+    # hyphens, commas, etc.) to a single underscore. Exercise names with
+    # punctuation Strava doesn't expect (e.g. "Standing Calf Raise, Cable")
+    # previously left stray characters like commas in the enum value here,
+    # which rendered as "Unknown" in the app.
+    return re.sub(r"[^A-Za-z0-9]+", "_", name.strip()).strip("_").upper()
 
 
 def build_strava_payload(workout: dict) -> dict:
