@@ -25,9 +25,12 @@ yesterday's workout to Strava", "sync my last session"):
    Liftohistory record — those aren't working sets.
 
    Save it into the `workouts/` directory (create it if it doesn't
-   exist yet) rather than overwriting a shared file, so every synced
-   workout is kept as its own record. Name it from the record's
-   `start_time` plus a slug of `name`:
+   exist yet) rather than overwriting a shared file, so each synced
+   workout gets its own file while the upload is in progress. This is
+   scratch space, not an archive — `workouts/` is gitignored and step 4
+   deletes the file once the sync succeeds, since it contains personal
+   exercise data that shouldn't sit in the (public) repo. Name it from
+   the record's `start_time` plus a slug of `name`:
 
    ```
    workouts/<start_time, colons stripped>-<slugified name>.json
@@ -51,7 +54,12 @@ yesterday's workout to Strava", "sync my last session"):
    once, and then every upload (from this script or anywhere else)
    inherits it automatically.
 
-4. Report back the activity URL from the script's output.
+4. On a successful upload, delete the JSON file you wrote in step 2
+   (`rm workouts/<the file>.json`). Never `git add` or commit anything
+   under `workouts/` — it's local scratch space only. If the upload
+   fails, leave the file in place so it can be retried or inspected.
+
+5. Report back the activity URL from the script's output.
 
 If credentials are missing (`sync_to_strava.py` will say so), tell the
 user to run `strava_auth.py` once first — that's an interactive,

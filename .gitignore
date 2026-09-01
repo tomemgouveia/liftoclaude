@@ -4,3 +4,4 @@
 *.pyc
 .ruff_cache
 .DS_Store
+workouts/*.json
