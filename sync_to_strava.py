@@ -21,11 +21,15 @@ Input JSON shape (see sample_workout.json):
 
 --- Important caveats (read before relying on this) ---
 
-1. Strava has not published an official schema for the JSON upload
-   format or the `exercise_type` enum values it expects. Everything
-   here is based on third-party developer reports (as of the May 2026
-   strength-training rollout) of what currently works, not Strava's
-   own docs. Field names or accepted values may drift over time.
+1. Strava does publish a "Supported Exercises" list of accepted
+   `exercise_type` values by category, at
+   developers.strava.com/docs/uploads/ — that's the source for entries
+   in EXERCISE_TYPE_MAP marked "docs" below. (Note: that domain isn't
+   reachable from every dev environment this script has been edited
+   in — if you can't fetch it, ask the user to paste the relevant
+   section rather than guessing.) It's still not a formal machine-
+   readable schema for the upload JSON format itself, and accepted
+   values may drift over time as Strava adds/renames exercises.
    Unrecognised exercise names commonly show up as "Unknown" in the
    app rather than causing an error — see EXERCISE_TYPE_MAP below.
 
@@ -53,12 +57,11 @@ from dotenv import load_dotenv, set_key
 
 ENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
 
-# Best-effort mapping from common exercise names to what the uploads API
-# seems to expect (upper snake case, loosely following the FIT SDK
-# exercise_name enum). Extend this as you find exercises that map wrong
-# or come back "Unknown" in the app. Anything not in this map falls back
-# to an automatic upper-snake-case of the name, which frequently works
-# for simple single-word lifts but not for everything (see caveat above).
+# Mapping from Liftosaur exercise names to Strava's exercise_type values.
+# Extend this as new exercises show up in your program. Anything not in
+# this map falls back to an automatic upper-snake-case of the name, which
+# frequently works for simple single-word lifts but not for everything
+# (see caveat above) — check the docs list there before guessing.
 #
 # IMPORTANT: Strava's exercise_type isn't the exercise *category* (e.g.
 # "SQUAT", "BENCH_PRESS") — it's a specific leaf value from the FIT SDK's
@@ -67,47 +70,51 @@ ENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
 # the bare category name doesn't error, it just silently renders as
 # "Unknown" in the app AND breaks per-exercise grouping of sets (each set
 # shows up as its own single-set "Unknown" entry instead of being merged).
-# Entries below marked "verified" were checked against the FIT SDK's
-# published exercise_name enum (github.com/dtcooper/python-fitparse
-# fitparse/profile.py); "unverified" entries are still just guesses like
-# the original map — if one comes back "Unknown", look up the real leaf
-# value for that category before assuming the guess is right.
+# Entries below marked "docs" were checked against Strava's own published
+# list of supported exercise_type values (developers.strava.com/docs/uploads/
+# — this wasn't reachable from this environment directly, but the user
+# pasted its "Supported Exercises" section verbatim). That list is the
+# actual ground truth; treat it as authoritative over guesses or the
+# general FIT SDK enum. Entries also marked "+ upload" were additionally
+# confirmed by checking a real uploaded activity's rendered name.
+# "unverified" entries are still just guesses — if one comes back
+# "Unknown", check the docs list above before guessing again.
 EXERCISE_TYPE_MAP = {
-    "Squat": "BARBELL_BACK_SQUAT",  # verified
-    "Front Squat": "BARBELL_FRONT_SQUAT",  # verified
-    "Bench Press": "BARBELL_BENCH_PRESS",  # verified
-    "Incline Bench Press": "INCLINE_BARBELL_BENCH_PRESS",  # verified
-    "Overhead Press": "OVERHEAD_BARBELL_PRESS",  # verified
-    "Shoulder Press": "SMITH_MACHINE_OVERHEAD_PRESS",  # verified (BARBELL_SHOULDER_PRESS renders Unknown despite being in the FIT SDK enum)
-    "Shoulder Press, Leverage Machine": "SEATED_MACHINE_SHOULDER_PRESS",  # unverified — SMITH_MACHINE_OVERHEAD_PRESS was wrong (user reported it rendered incorrectly on activity 20009445714 and fixed it in-app to "Machine Seated Shoulder Press"); this is a naming-convention guess (posture_equipment_movement, matching e.g. SEATED_CABLE_ROW), not yet confirmed via upload
-    "Deadlift": "BARBELL_DEADLIFT",  # verified
-    "Romanian Deadlift": "ROMANIAN_DEADLIFT",  # unverified
-    "Pendlay Row": "BENT_OVER_ROW",  # confirmed working via a real upload
-    "Bent Over Row": "BENT_OVER_ROW",  # confirmed working via a real upload
-    "Seated Row": "SEATED_CABLE_ROW",  # verified
-    "Lat Pulldown": "LAT_PULLDOWN",  # verified
-    "Bicep Curl": "STANDING_DUMBBELL_BICEPS_CURL",  # verified
-    "Hammer Curl": "DUMBBELL_HAMMER_CURL",  # verified
-    "Triceps Pushdown": "TRICEPS_PRESSDOWN",  # verified (Strava/FIT calls it "pressdown", not "pushdown")
-    "Skullcrusher": "LYING_TRICEPS_EXTENSION",  # unverified
-    "Leg Press": "LEG_PRESS",  # verified
-    "Standing Calf Raise": "STANDING_CALF_RAISE",  # unverified
-    "Standing Calf Raise, Cable": "STANDING_CALF_RAISE",  # confirmed via a real upload (activity 19977181952) — the untrimmed ", Cable" equipment suffix isn't in this map and the old fallback left a comma in the enum value, which rendered "Unknown"; user fixed it in-app to "Standing Calf Raise"
-    "Cable Crunch": "CABLE_CRUNCH",  # unverified
-    "Hanging Leg Raise": "HANGING_LEG_RAISE",  # unverified
-    "Side Bend": "DUMBBELL_SIDE_BEND",  # confirmed via a real upload (activity 19939855283) — WEIGHTED_SIDE_BEND rendered "Unknown"; user fixed it in-app to "Dumbbell Side Bend"
-    "Face Pull": "FACE_PULL",  # verified
-    "Lateral Raise": "LATERAL_RAISE",  # unverified
-    "Hip Thrust, Leverage Machine": "MACHINE_HIP_THRUST",  # confirmed via a real upload (activity 20011184163)
-    "Pallof Press": "PALLOF_PRESS",  # confirmed via a real upload (activity 20011184163)
-    "Seated Leg Curl": "LEG_CURL",  # WRONG — rendered "Unknown" on an isolated real upload (activity 20011260255); needs another guess. (An earlier mixed-batch test, activity 20011223536, also showed "Unknown" here but was inconclusive at the time because it *also* showed "Unknown" for SEATED_MACHINE_SHOULDER_PRESS, a value independently confirmed elsewhere — cause unresolved, possibly unrelated to this guess. This isolated retest, run without that confound, is the result that counts.)
-    "Leg Extension": "MACHINE_LEG_EXTENSION",  # confirmed via a real upload (activity 20011184163)
-    "Hip Abductor - Machine": "MACHINE_HIP_ABDUCTION",  # confirmed via a real upload (activity 20011184163); user's custom exercise
-    "Hip Adductor - Machine": "MACHINE_HIP_ADDUCTION",  # confirmed via a real upload (activity 20011184163); user's custom exercise
-    "Incline Row": "CHEST_SUPPORTED_ROW",  # confirmed via a real upload (activity 20011184163); replaces Pendlay Row in the L/S/U program
-    "Scapular Pull Up": "NEGATIVE_PULL_UP",  # placeholder — no dedicated Strava exercise type for this exists; user asked to map it to Negative Pull Up until Strava adds one
-    "Negative Pull Up": "NEGATIVE_PULL_UP",  # confirmed via a real upload (activity 20011184163)
-    "Pull Up": "STANDARD_PULL_UP",  # WRONG — rendered "Unknown" on an isolated real upload (activity 20011260255); needs another guess. See the Seated Leg Curl comment above re: the earlier inconclusive mixed-batch test.
+    "Squat": "BARBELL_BACK_SQUAT",  # docs
+    "Front Squat": "BARBELL_FRONT_SQUAT",  # docs
+    "Bench Press": "BARBELL_BENCH_PRESS",  # docs
+    "Incline Bench Press": "INCLINE_BARBELL_BENCH_PRESS",  # docs
+    "Overhead Press": "OVERHEAD_BARBELL_PRESS",  # docs
+    "Shoulder Press": "SMITH_MACHINE_OVERHEAD_PRESS",  # docs (BARBELL_SHOULDER_PRESS isn't in Strava's documented Shoulder Press list at all, consistent with it rendering Unknown)
+    "Shoulder Press, Leverage Machine": "MACHINE_SEATED_SHOULDER_PRESS",  # docs + upload (activity 20011321395) — the old value SEATED_MACHINE_SHOULDER_PRESS (wrong word order, not in Strava's docs) had also rendered correctly on 2 earlier uploads, so Strava may alias it, but this is the documented spelling.
+    "Deadlift": "BARBELL_DEADLIFT",  # docs
+    "Romanian Deadlift": "BARBELL_ROMANIAN_DEADLIFT",  # docs + upload (activity 20011321395) — old value ROMANIAN_DEADLIFT wasn't in Strava's list at all
+    "Pendlay Row": "BENT_OVER_ROW",  # docs + upload
+    "Bent Over Row": "BENT_OVER_ROW",  # docs + upload
+    "Seated Row": "SEATED_CABLE_ROW",  # docs
+    "Lat Pulldown": "LAT_PULLDOWN",  # docs
+    "Bicep Curl": "STANDING_DUMBBELL_BICEPS_CURL",  # docs
+    "Hammer Curl": "DUMBBELL_HAMMER_CURL",  # docs
+    "Triceps Pushdown": "TRICEPS_PRESSDOWN",  # docs (Strava calls it "pressdown", not "pushdown")
+    "Skullcrusher": "SKULL_CRUSHER",  # docs + upload (activity 20011321395) — old value LYING_TRICEPS_EXTENSION wasn't in Strava's Triceps Extension list at all
+    "Leg Press": "LEG_PRESS",  # docs
+    "Standing Calf Raise": "STANDING_CALF_RAISE",  # docs
+    "Standing Calf Raise, Cable": "STANDING_CALF_RAISE",  # docs + upload (activity 19977181952) — the untrimmed ", Cable" equipment suffix isn't in this map and the old fallback left a comma in the enum value, which rendered "Unknown"; user fixed it in-app to "Standing Calf Raise"
+    "Cable Crunch": "CABLE_CRUNCH",  # docs
+    "Hanging Leg Raise": "HANGING_LEG_RAISE",  # docs
+    "Side Bend": "DUMBBELL_SIDE_BEND",  # docs + upload (activity 19939855283) — WEIGHTED_SIDE_BEND rendered "Unknown"; user fixed it in-app to "Dumbbell Side Bend"
+    "Face Pull": "FACE_PULL",  # docs
+    "Lateral Raise": "LATERAL_RAISE_GENERIC",  # docs + upload (activity 20011321395) — old value LATERAL_RAISE (no _GENERIC) wasn't in Strava's Lateral Raise list at all
+    "Hip Thrust, Leverage Machine": "MACHINE_HIP_THRUST",  # docs + upload (activity 20011184163)
+    "Pallof Press": "PALLOF_PRESS",  # docs + upload (activity 20011184163)
+    "Seated Leg Curl": "MACHINE_LEG_CURL_SEATED",  # docs + upload (activity 20011321395) — old value LEG_CURL had confirmed "Unknown" on an isolated real upload (activity 20011260255)
+    "Leg Extension": "MACHINE_LEG_EXTENSION",  # docs + upload (activity 20011184163)
+    "Hip Abductor - Machine": "MACHINE_HIP_ABDUCTION",  # docs + upload (activity 20011184163); user's custom exercise
+    "Hip Adductor - Machine": "MACHINE_HIP_ADDUCTION",  # docs + upload (activity 20011184163); user's custom exercise
+    "Incline Row": "CHEST_SUPPORTED_ROW",  # docs + upload (activity 20011184163); replaces Pendlay Row in the L/S/U program
+    "Scapular Pull Up": "NEGATIVE_PULL_UP",  # placeholder — no dedicated Strava exercise type for this exists; user asked to map it to Negative Pull Up (itself a documented, confirmed value) until Strava adds one
+    "Negative Pull Up": "NEGATIVE_PULL_UP",  # docs + upload (activity 20011184163)
+    "Pull Up": "PULL_UP_GENERIC",  # docs + upload (activity 20011321395) — old value STANDARD_PULL_UP had confirmed "Unknown" on an isolated real upload (activity 20011260255); rendered exactly as "Pull Up", matching the user's own reference activity
 }
 
 
