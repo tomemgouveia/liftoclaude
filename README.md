@@ -16,6 +16,22 @@ strength activities. Everything this script does around that shape
 (see `sync_to_strava.py`) is reverse-engineered from observed behavior,
 not official docs — it may drift as Strava changes things.
 
+## Network access (Claude Code environments)
+
+If you're running this project inside a sandboxed Claude Code
+environment (web, cloud, or a locked-down local sandbox), configure it
+to allow outbound access to:
+
+- **`www.strava.com`** — OAuth and every Strava API call
+  (`strava_auth.py`, `sync_to_strava.py`); the sync flow can't work at
+  all without this.
+- **`developers.strava.com`** — Strava's official API docs, notably
+  the ["Supported Exercises"](https://developers.strava.com/docs/uploads/)
+  list of `exercise_type` values that `sync_to_strava.py`'s
+  `EXERCISE_TYPE_MAP` is built from. Without this allowed, Claude
+  can't check the live docs when extending the map for a new exercise
+  and has to fall back to guessing.
+
 ## Setup (one-time)
 
 1. **Install dependencies**
@@ -95,14 +111,18 @@ upload (again: only relevant to feed visibility, not true privacy).
 
 ## Known limitations
 
-- **Exercise name matching is best-effort.** Strava hasn't published
-  the `exercise_type` values the uploads API accepts. This script
-  ships a small mapping (`EXERCISE_TYPE_MAP` in `sync_to_strava.py`)
-  for common lifts and falls back to an automatic guess otherwise.
-  Unmatched exercises typically show up as "Unknown" in the Strava
-  app rather than causing an error — reps/weight/volume still show up
-  correctly either way, only the exercise label and muscle-map may be
-  affected. Extend the map as you find mismatches.
+- **Exercise name matching is best-effort.** Strava publishes a
+  "Supported Exercises" list of accepted `exercise_type` values at
+  [developers.strava.com/docs/uploads](https://developers.strava.com/docs/uploads/),
+  but not a formal machine-readable schema, and Liftosaur exercise
+  names don't map onto that list automatically. This script ships a
+  small mapping (`EXERCISE_TYPE_MAP` in `sync_to_strava.py`), built
+  from that page, for common lifts and falls back to an automatic
+  guess otherwise. Unmatched exercises typically show up as "Unknown"
+  in the Strava app rather than causing an error — reps/weight/volume
+  still show up correctly either way, only the exercise label and
+  muscle-map may be affected. Extend the map as you find mismatches —
+  check the live docs page first (see "Network access" above).
 - The muscle-map visualization Strava shows for in-app-logged
   workouts has been reported not to reliably appear on API-uploaded
   activities. Cosmetic only — doesn't affect the logged data.
