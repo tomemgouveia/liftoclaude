@@ -98,6 +98,16 @@ EXERCISE_TYPE_MAP = {
     "Side Bend": "DUMBBELL_SIDE_BEND",  # confirmed via a real upload (activity 19939855283) — WEIGHTED_SIDE_BEND rendered "Unknown"; user fixed it in-app to "Dumbbell Side Bend"
     "Face Pull": "FACE_PULL",  # verified
     "Lateral Raise": "LATERAL_RAISE",  # unverified
+    "Hip Thrust, Leverage Machine": "MACHINE_HIP_THRUST",  # confirmed via a real upload (activity 20011184163)
+    "Pallof Press": "PALLOF_PRESS",  # confirmed via a real upload (activity 20011184163)
+    "Seated Leg Curl": "SEATED_MACHINE_LEG_CURL",  # WRONG — rendered "Unknown" on a real upload (activity 20011184163); needs another guess
+    "Leg Extension": "MACHINE_LEG_EXTENSION",  # confirmed via a real upload (activity 20011184163)
+    "Hip Abductor - Machine": "MACHINE_HIP_ABDUCTION",  # confirmed via a real upload (activity 20011184163); user's custom exercise
+    "Hip Adductor - Machine": "MACHINE_HIP_ADDUCTION",  # confirmed via a real upload (activity 20011184163); user's custom exercise
+    "Incline Row": "CHEST_SUPPORTED_ROW",  # confirmed via a real upload (activity 20011184163); replaces Pendlay Row in the L/S/U program
+    "Scapular Pull Up": "NEGATIVE_PULL_UP",  # placeholder — no dedicated Strava exercise type for this exists; user asked to map it to Negative Pull Up until Strava adds one
+    "Negative Pull Up": "NEGATIVE_PULL_UP",  # confirmed via a real upload (activity 20011184163)
+    "Pull Up": "PULL_UP",  # WRONG — rendered "Unknown" on a real upload (activity 20011184163); needs another guess
 }
 
 
