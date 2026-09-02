@@ -24,16 +24,14 @@ Input JSON shape (see sample_workout.json):
 1. Strava does publish a "Supported Exercises" list of accepted
    `exercise_type` values by category, at
    developers.strava.com/docs/uploads/ — that's the source for entries
-   in EXERCISE_TYPE_MAP marked "docs" below. A copy of that list lives
-   in strava_exercise_types.md in this repo (captured 2026-09-02),
-   since developers.strava.com isn't reachable from every dev
-   environment this script gets edited in (network egress policy,
-   not a bug) — check that file before guessing at a new mapping, and
-   prefer the live page over the copy if you can reach it, since the
-   copy can drift out of date as Strava adds/renames exercises. It's
-   still not a formal machine-readable schema for the upload JSON
-   format itself. Unrecognised exercise names commonly show up as
-   "Unknown" in the app rather than causing an error — see
+   in EXERCISE_TYPE_MAP marked "docs" below. Check that live page
+   before guessing at a new mapping. If you're editing this from a
+   sandboxed Claude Code environment, make sure it's configured to
+   allow outbound access to developers.strava.com (and www.strava.com,
+   which this script itself calls) — see "Network access" in
+   README.md. It's still not a formal machine-readable schema for the
+   upload JSON format itself. Unrecognised exercise names commonly
+   show up as "Unknown" in the app rather than causing an error — see
    EXERCISE_TYPE_MAP below.
 
 2. Privacy: the Strava API has not supported setting an activity's
@@ -74,13 +72,13 @@ ENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
 # "Unknown" in the app AND breaks per-exercise grouping of sets (each set
 # shows up as its own single-set "Unknown" entry instead of being merged).
 # Entries below marked "docs" were checked against Strava's own published
-# list of supported exercise_type values — see strava_exercise_types.md
-# (source: developers.strava.com/docs/uploads/, see caveat 1 above). That
-# list is the actual ground truth; treat it as authoritative over guesses
-# or the general FIT SDK enum. Entries also marked "+ upload" were
-# additionally confirmed by checking a real uploaded activity's rendered
-# name. "unverified" entries are still just guesses — if one comes back
-# "Unknown", check strava_exercise_types.md before guessing again.
+# list of supported exercise_type values at
+# developers.strava.com/docs/uploads/ (see caveat 1 above). That list is
+# the actual ground truth; treat it as authoritative over guesses or the
+# general FIT SDK enum. Entries also marked "+ upload" were additionally
+# confirmed by checking a real uploaded activity's rendered name.
+# "unverified" entries are still just guesses — if one comes back
+# "Unknown", check the live docs page before guessing again.
 EXERCISE_TYPE_MAP = {
     "Squat": "BARBELL_BACK_SQUAT",  # docs
     "Front Squat": "BARBELL_FRONT_SQUAT",  # docs
