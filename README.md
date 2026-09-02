@@ -20,7 +20,10 @@ not official docs — it may drift as Strava changes things.
 
 If you're running this project inside a sandboxed Claude Code
 environment (web, cloud, or a locked-down local sandbox), configure it
-to allow outbound access to:
+to allow outbound access to **`*.strava.com`** (a plain `strava.com`
+entry is not enough — the allowlist matches hostnames exactly unless
+you use a leading `*.` wildcard, and none of what's needed here is the
+bare domain). That wildcard covers both hosts this project needs:
 
 - **`www.strava.com`** — OAuth and every Strava API call
   (`strava_auth.py`, `sync_to_strava.py`); the sync flow can't work at
