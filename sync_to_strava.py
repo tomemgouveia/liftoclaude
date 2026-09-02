@@ -79,6 +79,7 @@ EXERCISE_TYPE_MAP = {
     "Incline Bench Press": "INCLINE_BARBELL_BENCH_PRESS",  # verified
     "Overhead Press": "OVERHEAD_BARBELL_PRESS",  # verified
     "Shoulder Press": "SMITH_MACHINE_OVERHEAD_PRESS",  # verified (BARBELL_SHOULDER_PRESS renders Unknown despite being in the FIT SDK enum)
+    "Shoulder Press, Leverage Machine": "SMITH_MACHINE_OVERHEAD_PRESS",  # confirmed via a real upload (activity 20009445714)
     "Deadlift": "BARBELL_DEADLIFT",  # verified
     "Romanian Deadlift": "ROMANIAN_DEADLIFT",  # unverified
     "Pendlay Row": "BENT_OVER_ROW",  # confirmed working via a real upload
