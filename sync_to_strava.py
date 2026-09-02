@@ -100,14 +100,14 @@ EXERCISE_TYPE_MAP = {
     "Lateral Raise": "LATERAL_RAISE",  # unverified
     "Hip Thrust, Leverage Machine": "MACHINE_HIP_THRUST",  # confirmed via a real upload (activity 20011184163)
     "Pallof Press": "PALLOF_PRESS",  # confirmed via a real upload (activity 20011184163)
-    "Seated Leg Curl": "LEG_CURL",  # unverified — inconclusive test (activity 20011223536): every exercise in that upload came back "Unknown", including SEATED_MACHINE_SHOULDER_PRESS which was independently confirmed elsewhere, so treat that batch as untrustworthy rather than confirmation this guess is wrong. Retry in isolation.
+    "Seated Leg Curl": "LEG_CURL",  # WRONG — rendered "Unknown" on an isolated real upload (activity 20011260255); needs another guess. (An earlier mixed-batch test, activity 20011223536, also showed "Unknown" here but was inconclusive at the time because it *also* showed "Unknown" for SEATED_MACHINE_SHOULDER_PRESS, a value independently confirmed elsewhere — cause unresolved, possibly unrelated to this guess. This isolated retest, run without that confound, is the result that counts.)
     "Leg Extension": "MACHINE_LEG_EXTENSION",  # confirmed via a real upload (activity 20011184163)
     "Hip Abductor - Machine": "MACHINE_HIP_ABDUCTION",  # confirmed via a real upload (activity 20011184163); user's custom exercise
     "Hip Adductor - Machine": "MACHINE_HIP_ADDUCTION",  # confirmed via a real upload (activity 20011184163); user's custom exercise
     "Incline Row": "CHEST_SUPPORTED_ROW",  # confirmed via a real upload (activity 20011184163); replaces Pendlay Row in the L/S/U program
     "Scapular Pull Up": "NEGATIVE_PULL_UP",  # placeholder — no dedicated Strava exercise type for this exists; user asked to map it to Negative Pull Up until Strava adds one
     "Negative Pull Up": "NEGATIVE_PULL_UP",  # confirmed via a real upload (activity 20011184163)
-    "Pull Up": "STANDARD_PULL_UP",  # unverified — same inconclusive test as Seated Leg Curl above (activity 20011223536); retry in isolation
+    "Pull Up": "STANDARD_PULL_UP",  # WRONG — rendered "Unknown" on an isolated real upload (activity 20011260255); needs another guess. See the Seated Leg Curl comment above re: the earlier inconclusive mixed-batch test.
 }
 
 
