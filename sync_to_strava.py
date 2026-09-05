@@ -89,6 +89,7 @@ EXERCISE_TYPE_MAP = {
     "Shoulder Press, Leverage Machine": "MACHINE_SEATED_SHOULDER_PRESS",  # docs + upload (activity 20011321395) — the old value SEATED_MACHINE_SHOULDER_PRESS (wrong word order, not in Strava's docs) had also rendered correctly on 2 earlier uploads, so Strava may alias it, but this is the documented spelling.
     "Deadlift": "BARBELL_DEADLIFT",  # docs
     "Romanian Deadlift": "BARBELL_ROMANIAN_DEADLIFT",  # docs + upload (activity 20011321395) — old value ROMANIAN_DEADLIFT wasn't in Strava's list at all
+    "Single Leg Deadlift": "SINGLE_LEG_DUMBBELL_ROMANIAN_DEADLIFTS",  # docs — Liftosaur's "Single Leg Deadlift" has no ", Dumbbell" variant (like "Bicep Curl", the bare name is the dumbbell version); unverified by upload
     "Pendlay Row": "BENT_OVER_ROW",  # docs + upload
     "Bent Over Row": "BENT_OVER_ROW",  # docs + upload
     "Seated Row": "SEATED_CABLE_ROW",  # docs
@@ -100,6 +101,7 @@ EXERCISE_TYPE_MAP = {
     "Leg Press": "LEG_PRESS",  # docs
     "Standing Calf Raise": "STANDING_CALF_RAISE",  # docs
     "Standing Calf Raise, Cable": "STANDING_CALF_RAISE",  # docs + upload (activity 19977181952) — the untrimmed ", Cable" equipment suffix isn't in this map and the old fallback left a comma in the enum value, which rendered "Unknown"; user fixed it in-app to "Standing Calf Raise"
+    "Single Leg Standing Calf Raise, Dumbbell": "SINGLE_LEG_DUMBBELL_STANDING_CALF_RAISE",  # docs — matches the L/S/U program's exercise name exactly; unverified by upload
     "Cable Crunch": "CABLE_CRUNCH",  # docs
     "Hanging Leg Raise": "HANGING_LEG_RAISE",  # docs
     "Side Bend": "DUMBBELL_SIDE_BEND",  # docs + upload (activity 19939855283) — WEIGHTED_SIDE_BEND rendered "Unknown"; user fixed it in-app to "Dumbbell Side Bend"
