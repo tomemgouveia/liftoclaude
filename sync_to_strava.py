@@ -101,6 +101,7 @@ EXERCISE_TYPE_MAP = {
     "Leg Press": "LEG_PRESS",  # docs
     "Standing Calf Raise": "STANDING_CALF_RAISE",  # docs
     "Standing Calf Raise, Cable": "STANDING_CALF_RAISE",  # docs + upload (activity 19977181952) — the untrimmed ", Cable" equipment suffix isn't in this map and the old fallback left a comma in the enum value, which rendered "Unknown"; user fixed it in-app to "Standing Calf Raise"
+    "Standing Calf Raise, Leverage Machine": "STANDING_CALF_RAISE",  # docs + upload (activity 20070453899) — same untrimmed-suffix issue as the Cable variant above; rendered "Unknown", user confirmed it's the same machine as the plain "Standing Calf Raise" entry
     "Single Leg Standing Calf Raise, Dumbbell": "SINGLE_LEG_DUMBBELL_STANDING_CALF_RAISE",  # docs — matches the L/S/U program's exercise name exactly; unverified by upload
     "Cable Crunch": "CABLE_CRUNCH",  # docs
     "Hanging Leg Raise": "HANGING_LEG_RAISE",  # docs
