@@ -12,6 +12,9 @@ Input JSON shape (see sample_workout.json):
   "name": "Fierce 5 - Workout A",
   "start_time": "2026-08-24T16:56:02Z",   // ISO 8601, UTC
   "elapsed_time": 1868,                    // seconds
+  "utc_offset": 3600,                      // optional, seconds; defaults to
+                                            // ATHLETE_TIMEZONE's offset at
+                                            // start_time (see below) if omitted
   "description": "optional free text",
   "exercises": [
     {"name": "Squat", "sets": [{"reps": 5, "weight_kg": 60}, ...]},
@@ -52,11 +55,35 @@ import re
 import sys
 import time
 import uuid
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import requests
 from dotenv import load_dotenv, set_key
 
 ENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
+
+# The athlete's home timezone — confirmed via Strava's get_athlete_profile
+# (location: London, UK). Used to compute utc_offset for Strava's
+# start_date_local display when a workout JSON doesn't specify one
+# explicitly (see default_utc_offset below). A zoneinfo name, not a fixed
+# offset in seconds, so it stays correct across BST/GMT transitions —
+# Liftosaur's history records report start times in UTC (see the "+00:00"
+# in e.g. "2026-09-09 06:37:54 +00:00"), and without a correct utc_offset
+# Strava displays that raw UTC instant as if it were already local time,
+# which is off by an hour whenever the athlete isn't literally in UTC+0
+# (confirmed: a 06:37:54 UTC workout upload without utc_offset rendered as
+# "6:37" on Strava instead of the true local 07:37 BST — activity
+# 20098878269). Update this if the athlete's home location changes.
+ATHLETE_TIMEZONE = ZoneInfo("Europe/London")
+
+
+def default_utc_offset(start_time_iso: str) -> int:
+    """Seconds to add to a UTC start_time to get ATHLETE_TIMEZONE's local
+    time, computed at that specific instant so DST transitions (BST vs GMT)
+    are handled correctly rather than baking in a fixed offset."""
+    dt = datetime.fromisoformat(start_time_iso.replace("Z", "+00:00"))
+    return int(dt.astimezone(ATHLETE_TIMEZONE).utcoffset().total_seconds())
 
 # Mapping from Liftosaur exercise names to Strava's exercise_type values.
 # Extend this as new exercises show up in your program. Anything not in
@@ -151,7 +178,9 @@ def build_strava_payload(workout: dict) -> dict:
     return {
         "version": "1.0",
         "start_time": workout["start_time"],
-        "utc_offset": workout.get("utc_offset", 0),
+        "utc_offset": workout.get(
+            "utc_offset", default_utc_offset(workout["start_time"])
+        ),
         "elapsed_time": workout["elapsed_time"],
         "sets": sets,
     }
