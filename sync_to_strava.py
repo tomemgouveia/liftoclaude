@@ -95,8 +95,10 @@ EXERCISE_TYPE_MAP = {
     "Seated Row": "SEATED_CABLE_ROW",  # docs
     "Lat Pulldown": "LAT_PULLDOWN",  # docs
     "Bicep Curl": "STANDING_DUMBBELL_BICEPS_CURL",  # docs
+    "Bicep Curl, Cable": "CABLE_BICEPS_CURL",  # docs — unverified by upload
     "Hammer Curl": "DUMBBELL_HAMMER_CURL",  # docs
     "Triceps Pushdown": "TRICEPS_PRESSDOWN",  # docs (Strava calls it "pressdown", not "pushdown")
+    "Triceps Extension, Cable": "CABLE_TRICEPS_PUSHDOWN",  # docs — closest generic cable option in Strava's Triceps Extension list; unverified by upload, distinct from "Triceps Pushdown" above (Liftosaur models them as separate exercises)
     "Skullcrusher": "SKULL_CRUSHER",  # docs + upload (activity 20011321395) — old value LYING_TRICEPS_EXTENSION wasn't in Strava's Triceps Extension list at all
     "Leg Press": "LEG_PRESS",  # docs
     "Standing Calf Raise": "STANDING_CALF_RAISE",  # docs
