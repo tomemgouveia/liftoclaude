@@ -133,6 +133,7 @@ EXERCISE_TYPE_MAP = {
     "Standing Calf Raise, Leverage Machine": "STANDING_CALF_RAISE",  # docs + upload (activity 20070453899) — same untrimmed-suffix issue as the Cable variant above; rendered "Unknown", user confirmed it's the same machine as the plain "Standing Calf Raise" entry
     "Single Leg Standing Calf Raise, Dumbbell": "SINGLE_LEG_DUMBBELL_STANDING_CALF_RAISE",  # docs — matches the L/S/U program's exercise name exactly; unverified by upload
     "Cable Crunch": "CABLE_CRUNCH",  # docs
+    "Incline Crunch": "DECLINE_CRUNCH",  # docs + upload (activity 20133759746) — Strava has no "Incline Crunch" enum; rendered "Unknown", user confirmed their incline-bench crunch is the same movement as Strava's "Decline Crunch" and fixed it in-app to that
     "Hanging Leg Raise": "HANGING_LEG_RAISE",  # docs
     "Side Bend": "DUMBBELL_SIDE_BEND",  # docs + upload (activity 19939855283) — WEIGHTED_SIDE_BEND rendered "Unknown"; user fixed it in-app to "Dumbbell Side Bend"
     "Face Pull": "FACE_PULL",  # docs
