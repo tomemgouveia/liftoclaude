@@ -1,0 +1,12 @@
+[flake8]
+# Match ruff format's line length (ruff's default, and one of this
+# project's own tools now) rather than flake8's stock 79.
+max-line-length = 88
+# E501 (line too long): several EXERCISE_TYPE_MAP comments in
+# sync_to_strava.py deliberately run well past any reasonable wrap width
+# to carry per-mapping provenance (which upload/commit confirmed it,
+# what the old wrong value was, etc.) — wrapping them loses that context
+# for no benefit, so line length isn't enforced here.
+# E203 (whitespace before ':'): conflicts with how ruff format (and
+# black) deliberately space slices.
+extend-ignore = E501, E203
