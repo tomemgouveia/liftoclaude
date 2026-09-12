@@ -1,17 +1,13 @@
-"""An end-to-end check of main()'s --dry-run path: argument parsing plus
-build_strava_payload wired together, exercised as a real subprocess so it
-also pins down the current `python sync_to_strava.py <file>` invocation
-itself — the part of the CLI's behavior users (and CLAUDE.md) depend on
-that unit tests of the individual functions wouldn't catch. --dry-run
-needs no credentials or network, since main() returns before load_dotenv.
+"""An end-to-end check of the `sync-to-strava` CLI's --dry-run path:
+argument parsing, McpExportSource, and build_strava_payload wired
+together, exercised as a real subprocess so it also pins down the actual
+invocation itself, not just the functions underneath it. --dry-run needs
+no credentials or network, since main() returns before load_dotenv.
 """
 
 import json
 import subprocess
 import sys
-from pathlib import Path
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def test_dry_run_prints_the_built_payload_without_network_or_credentials(tmp_path):
@@ -30,12 +26,7 @@ def test_dry_run_prints_the_built_payload_without_network_or_credentials(tmp_pat
     )
 
     result = subprocess.run(
-        [
-            sys.executable,
-            str(REPO_ROOT / "sync_to_strava.py"),
-            str(workout_file),
-            "--dry-run",
-        ],
+        [sys.executable, "-m", "liftostrava.cli.sync", str(workout_file), "--dry-run"],
         capture_output=True,
         text=True,
         check=True,
@@ -63,7 +54,8 @@ def test_dry_run_public_flag_disables_hide_from_home(tmp_path):
     result = subprocess.run(
         [
             sys.executable,
-            str(REPO_ROOT / "sync_to_strava.py"),
+            "-m",
+            "liftostrava.cli.sync",
             str(workout_file),
             "--dry-run",
             "--public",

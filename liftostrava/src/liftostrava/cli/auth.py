@@ -12,16 +12,17 @@ Requires STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET to already be set in
 """
 
 import os
-import re
 import sys
 
 import requests
-from dotenv import load_dotenv, set_key
+from dotenv import load_dotenv
 
-ENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
-
-SCOPE = "activity:write,activity:read_all"
-REDIRECT_URI = "http://localhost/exchange_token"
+from liftostrava.config import ENV_PATH
+from liftostrava.strava.auth import (
+    build_authorize_url,
+    exchange_authorization_code,
+    extract_code,
+)
 
 
 def main():
@@ -40,17 +41,8 @@ def main():
         print("STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET are missing from .env.")
         sys.exit(1)
 
-    auth_url = (
-        "https://www.strava.com/oauth/authorize"
-        f"?client_id={client_id}"
-        f"&redirect_uri={REDIRECT_URI}"
-        "&response_type=code"
-        f"&approval_prompt=force"
-        f"&scope={SCOPE}"
-    )
-
     print("1. Open this URL in a browser and authorize the app:\n")
-    print(f"   {auth_url}\n")
+    print(f"   {build_authorize_url(client_id)}\n")
     print(
         "2. Strava will redirect to a localhost URL that won't load (that's expected)."
     )
@@ -60,20 +52,16 @@ def main():
     )
 
     raw = input("Paste the redirect URL or code: ").strip()
+    code = extract_code(raw)
 
-    match = re.search(r"code=([^&]+)", raw)
-    code = match.group(1) if match else raw
-
-    resp = requests.post(
-        "https://www.strava.com/oauth/token",
-        data={
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "code": code,
-            "grant_type": "authorization_code",
-        },
-    )
-    if not resp.ok:
+    try:
+        tokens = exchange_authorization_code(client_id, client_secret, code)
+    except requests.HTTPError as e:
+        resp = e.response
+        # .response is typed Optional since HTTPError can in principle be
+        # raised without one, but raise_for_status() (inside
+        # exchange_authorization_code) always attaches the response it saw.
+        assert resp is not None
         print(f"\nStrava rejected the token exchange (HTTP {resp.status_code}):")
         print(f"   {resp.text}\n")
         print("Common causes:")
@@ -92,17 +80,13 @@ def main():
             "full 'code=' value, not truncated by the terminal)."
         )
         sys.exit(1)
-    tokens = resp.json()
-
-    refresh_token = tokens["refresh_token"]
-    set_key(ENV_PATH, "STRAVA_REFRESH_TOKEN", refresh_token)
 
     athlete = tokens.get("athlete", {})
     print(
         f"\nAuthorized as {athlete.get('firstname', '')} {athlete.get('lastname', '')}."
     )
     print(
-        "Refresh token saved to .env. You're set — run sync_to_strava.py "
+        "Refresh token saved to .env. You're set — run sync-to-strava "
         "whenever you want to sync a workout."
     )
 
