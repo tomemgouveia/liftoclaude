@@ -243,7 +243,7 @@ def upload_activity(access_token: str, workout: dict, sport_type: str) -> dict:
     return resp.json()
 
 
-def poll_upload(access_token: str, upload_id: int, timeout_s: int = 30) -> dict:
+def poll_upload(access_token: str, upload_id: int, timeout_s: float = 30) -> dict:
     # Starts unset rather than only being assigned inside the loop: with a
     # very small timeout_s the loop body can run zero times, and the
     # TimeoutError below used to reference this while still unbound,

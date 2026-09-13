@@ -4,8 +4,8 @@ mocked via `responses` (no real network, no credentials needed). These
 pin down a few behaviors that were bugfixed deliberately and would be easy
 to lose in a refactor:
 
-  - refresh_access_token persists a rotated refresh_token, but only writes
-    to .env when Strava actually returned a different one.
+  - refresh_access_token persists a rotated refresh_token to a real .env
+    file, but only writes when Strava actually returned a different one.
   - upload_activity gives every call a unique filename/external_id, since
     Strava dedupes uploads by that field and a fixed name made retries
     return a stale cached result (see the comment above upload_activity).
@@ -20,40 +20,45 @@ import sync_to_strava as sts
 
 
 @responses.activate
-def test_refresh_access_token_persists_a_rotated_refresh_token(monkeypatch):
+def test_refresh_access_token_persists_a_rotated_refresh_token(tmp_path, monkeypatch):
+    # A real .env file rather than a mocked set_key: this verifies the
+    # actual persisted state, not just that some function was called with
+    # arguments that looked right.
+    env_file = tmp_path / ".env"
+    env_file.write_text("STRAVA_REFRESH_TOKEN=old-refresh\n")
+    monkeypatch.setattr(sts, "ENV_PATH", str(env_file))
     responses.add(
         responses.POST,
         "https://www.strava.com/oauth/token",
         json={"access_token": "new-access", "refresh_token": "rotated-refresh"},
         status=200,
     )
-    set_key_calls = []
-    monkeypatch.setattr(
-        sts, "set_key", lambda path, key, value: set_key_calls.append((key, value))
-    )
 
     token = sts.refresh_access_token("cid", "csecret", "old-refresh")
 
     assert token == "new-access"
-    assert set_key_calls == [("STRAVA_REFRESH_TOKEN", "rotated-refresh")]
+    assert "STRAVA_REFRESH_TOKEN='rotated-refresh'" in env_file.read_text()
 
 
 @responses.activate
 def test_refresh_access_token_skips_rewrite_when_refresh_token_is_unchanged(
-    monkeypatch,
+    tmp_path, monkeypatch
 ):
+    env_file = tmp_path / ".env"
+    env_file.write_text("STRAVA_REFRESH_TOKEN=same-refresh\n")
+    monkeypatch.setattr(sts, "ENV_PATH", str(env_file))
+    before = env_file.read_text()
     responses.add(
         responses.POST,
         "https://www.strava.com/oauth/token",
         json={"access_token": "new-access", "refresh_token": "same-refresh"},
         status=200,
     )
-    set_key_calls = []
-    monkeypatch.setattr(sts, "set_key", lambda *a: set_key_calls.append(a))
 
     sts.refresh_access_token("cid", "csecret", "same-refresh")
 
-    assert set_key_calls == []
+    # No rewrite at all — not even a reformatted but value-equal line.
+    assert env_file.read_text() == before
 
 
 @responses.activate
@@ -70,7 +75,9 @@ def test_upload_activity_sends_expected_form_fields_and_payload(sample_workout):
     assert result["id"] == 999
     sent = responses.calls[0].request
     assert sent.headers["Authorization"] == "Bearer token"
-    assert b'"version": "1.0"' in sent.body
+    body = sent.body
+    assert isinstance(body, bytes)
+    assert b'"version": "1.0"' in body
 
 
 @responses.activate
@@ -91,10 +98,11 @@ def test_upload_activity_uses_a_unique_filename_per_call(sample_workout):
     sts.upload_activity("token", sample_workout, "WeightTraining")
     sts.upload_activity("token", sample_workout, "WeightTraining")
 
-    filenames = [
-        call.request.body.split(b'filename="')[1].split(b'"')[0]
-        for call in responses.calls
-    ]
+    filenames = []
+    for call in responses.calls:
+        body = call.request.body
+        assert isinstance(body, bytes)
+        filenames.append(body.split(b'filename="')[1].split(b'"')[0])
     assert filenames[0] != filenames[1]
 
 
