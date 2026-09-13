@@ -38,30 +38,35 @@ yesterday's workout to Strava", "sync my last session"):
 
    e.g. `workouts/2026-08-24T165602Z-fierce-5-workout-a.json`.
 
-3. Run the script against that file:
+3. Run the CLI against that file:
 
    ```
-   python sync_to_strava.py workouts/<the file you just wrote>.json
+   sync-to-strava workouts/<the file you just wrote>.json
    ```
+
+   (If the `liftostrava` package isn't installed into the active
+   environment yet, run `pip install -e "./liftostrava[dev]"` from the
+   repo root first — see `README.md`.)
 
    By default this mutes the activity from Strava's home feed
-   (`hide_from_home`), but see the privacy caveat in `sync_to_strava.py`'s
-   docstring and `README.md` — that is NOT the same as "Only You"
-   visibility, which the Strava API cannot set. Pass `--public` only if
-   the user explicitly asks not to mute it. If the user wants a true
-   "Only You" default, tell them to set that in the Strava app itself
-   (Settings > Privacy Controls > Activities) — this only needs doing
-   once, and then every upload (from this script or anywhere else)
-   inherits it automatically.
+   (`hide_from_home`), but see the privacy caveat in
+   `liftostrava/src/liftostrava/cli/sync.py`'s docstring and
+   `README.md` — that is NOT the same as "Only You" visibility, which
+   the Strava API cannot set. Pass `--public` only if the user
+   explicitly asks not to mute it. If the user wants a true "Only You"
+   default, tell them to set that in the Strava app itself (Settings >
+   Privacy Controls > Activities) — this only needs doing once, and
+   then every upload (from this tool or anywhere else) inherits it
+   automatically.
 
 4. On a successful upload, delete the JSON file you wrote in step 2
    (`rm workouts/<the file>.json`). Never `git add` or commit anything
    under `workouts/` — it's local scratch space only. If the upload
    fails, leave the file in place so it can be retried or inspected.
 
-5. Report back the activity URL from the script's output.
+5. Report back the activity URL from the CLI's output.
 
-If credentials are missing (`sync_to_strava.py` will say so), tell the
-user to run `strava_auth.py` once first — that's an interactive,
+If credentials are missing (`sync-to-strava` will say so), tell the
+user to run `strava-auth` once first — that's an interactive,
 one-time step they need to do themselves (it opens a browser
 authorization flow), not something to automate on their behalf.

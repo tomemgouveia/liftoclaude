@@ -12,9 +12,41 @@ uploads it via Strava's undocumented JSON activity-upload format.
 
 **A note on that format:** Strava has not published a schema for the
 JSON upload payload or the `exercise_type` values it accepts for
-strength activities. Everything this script does around that shape
-(see `sync_to_strava.py`) is reverse-engineered from observed behavior,
-not official docs — it may drift as Strava changes things.
+strength activities. Everything this tool does around that shape
+(see `liftostrava/src/liftostrava/strava/`) is reverse-engineered from
+observed behavior, not official docs — it may drift as Strava changes
+things.
+
+## Project layout
+
+This repo is a single installable package, `liftostrava`, living in
+its own `liftostrava/` subdirectory (room for a sibling package later,
+without reshuffling this one, if there's ever a reason to split
+something out — see `liftostrava/src/liftostrava/sources/` below).
+`.env` and `workouts/` stay at the repo root since they're runtime
+config/data, not code:
+
+```
+liftostrava/
+├── pyproject.toml
+├── src/liftostrava/
+│   ├── models.py        # Set, Exercise, Workout — the normalized shape
+│   ├── sources/         # how a workout gets into the system
+│   │   ├── base.py          # WorkoutSource protocol
+│   │   └── mcp_export.py    # today's route: the JSON file written after
+│   │                        # an MCP call (see CLAUDE.md) — a second
+│   │                        # route (e.g. calling Liftosaur's REST API
+│   │                        # directly) can sit alongside this later
+│   ├── strava/           # everything Strava-facing
+│   │   ├── exercise_map.py  # Liftosaur name -> Strava exercise_type
+│   │   ├── payload.py       # Workout -> Strava's upload JSON
+│   │   ├── auth.py          # OAuth: authorize once, refresh per run
+│   │   └── client.py        # upload / poll / mute, over HTTP
+│   └── cli/
+│       ├── sync.py          # `sync-to-strava` entrypoint
+│       └── auth.py          # `strava-auth` entrypoint
+└── tests/
+```
 
 ## Network access (Claude Code environments)
 
@@ -25,22 +57,27 @@ entry is not enough — the allowlist matches hostnames exactly unless
 you use a leading `*.` wildcard, and none of what's needed here is the
 bare domain). That wildcard covers both hosts this project needs:
 
-- **`www.strava.com`** — OAuth and every Strava API call
-  (`strava_auth.py`, `sync_to_strava.py`); the sync flow can't work at
-  all without this.
+- **`www.strava.com`** — OAuth and every Strava API call (`strava-auth`,
+  `sync-to-strava`); the sync flow can't work at all without this.
 - **`developers.strava.com`** — Strava's official API docs, notably
   the ["Supported Exercises"](https://developers.strava.com/docs/uploads/)
-  list of `exercise_type` values that `sync_to_strava.py`'s
+  list of `exercise_type` values that `strava/exercise_map.py`'s
   `EXERCISE_TYPE_MAP` is built from. Without this allowed, Claude
   can't check the live docs when extending the map for a new exercise
   and has to fall back to guessing.
 
 ## Setup (one-time)
 
-1. **Install dependencies**
+1. **Install the package** (into a virtualenv — this creates `.venv/`
+   if you don't already have one)
    ```
-   pip install -r requirements.txt
+   python -m venv .venv && source .venv/bin/activate
+   pip install -e "./liftostrava[dev]"
    ```
+   This installs `liftostrava` in editable mode plus its dev
+   dependencies (pytest, responses, pre-commit, ruff), and puts the
+   `sync-to-strava` / `strava-auth` commands on your `PATH` within the
+   venv.
 
 2. **Register a Strava API app**: go to
    [strava.com/settings/api](https://www.strava.com/settings/api),
@@ -55,23 +92,23 @@ bare domain). That wildcard covers both hosts this project needs:
 
 4. **Authorize once**
    ```
-   python strava_auth.py
+   strava-auth
    ```
    This opens a Strava consent flow in your browser and saves a
    refresh token into `.env`. You only need to do this once — the
-   script refreshes the access token automatically after that.
+   CLI refreshes the access token automatically after that.
 
-## Test it (yesterday's workout is included as a fixture)
+## Test it (a sample workout is included as a fixture)
 
 Dry run first — no network calls, no credentials needed, just prints
 what would be sent:
 ```
-python sync_to_strava.py sample_workout.json --dry-run
+sync-to-strava liftostrava/tests/fixtures/sample_workout.json --dry-run
 ```
 
 Once your `.env` is set up, do a real upload:
 ```
-python sync_to_strava.py sample_workout.json
+sync-to-strava liftostrava/tests/fixtures/sample_workout.json
 ```
 It'll print the resulting activity URL when done.
 
@@ -79,14 +116,14 @@ It'll print the resulting activity URL when done.
 
 Point Claude Code at this project (it reads `CLAUDE.md` automatically)
 and just ask it to sync a workout — it'll pull the data from your
-connected Liftosaur MCP, shape it into the JSON this script expects,
-and run the upload for you.
+connected Liftosaur MCP, shape it into the JSON `sync-to-strava`
+expects, and run the upload for you.
 
 Each synced workout is written to `workouts/` as its own timestamped
 file (e.g. `workouts/2026-08-24T165602Z-fierce-5-workout-a.json`)
 rather than overwriting a single shared file, so past syncs stay
 around as a record. You can also build/edit one by hand — see
-`sample_workout.json` for the shape.
+`liftostrava/tests/fixtures/sample_workout.json` for the shape.
 
 ## Privacy — please read
 
@@ -118,9 +155,10 @@ upload (again: only relevant to feed visibility, not true privacy).
   "Supported Exercises" list of accepted `exercise_type` values at
   [developers.strava.com/docs/uploads](https://developers.strava.com/docs/uploads/),
   but not a formal machine-readable schema, and Liftosaur exercise
-  names don't map onto that list automatically. This script ships a
-  small mapping (`EXERCISE_TYPE_MAP` in `sync_to_strava.py`), built
-  from that page, for common lifts and falls back to an automatic
+  names don't map onto that list automatically. This project ships a
+  small mapping (`EXERCISE_TYPE_MAP` in
+  `liftostrava/src/liftostrava/strava/exercise_map.py`), built from
+  that page, for common lifts and falls back to an automatic
   guess otherwise. Unmatched exercises typically show up as "Unknown"
   in the Strava app rather than causing an error — reps/weight/volume
   still show up correctly either way, only the exercise label and

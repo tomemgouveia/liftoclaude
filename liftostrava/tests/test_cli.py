@@ -1,23 +1,20 @@
-"""End-to-end checks of main(): the --dry-run path via a real subprocess
-(pinning down the actual `python sync_to_strava.py <file>` invocation,
-with no credentials or network needed since main() returns before
-load_dotenv), and the real upload path in-process with Strava mocked via
-`responses` (a subprocess can't easily have its network calls intercepted,
-so this half uses a real .env file plus monkeypatched ENV_PATH/argv
-instead) — verifying refresh -> upload -> poll -> mute are actually wired
-together correctly, including the --public branch.
+"""End-to-end checks of the `sync-to-strava` CLI: the --dry-run path via
+a real subprocess (pinning down the actual invocation itself, not just
+the functions underneath it — no credentials or network needed since
+main() returns before load_dotenv), and the real upload path in-process
+with Strava mocked via `responses` (a subprocess can't easily have its
+network calls intercepted, so this half uses a real .env file plus
+monkeypatched ENV_PATH/argv instead) — verifying refresh -> upload ->
+poll -> mute are actually wired together correctly, including the
+--public branch.
 """
 
 import json
 import subprocess
 import sys
-from pathlib import Path
 
 import responses
-
-import sync_to_strava as sts
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
+from liftostrava.cli import sync
 
 
 def test_dry_run_prints_the_built_payload_without_network_or_credentials(tmp_path):
@@ -36,12 +33,7 @@ def test_dry_run_prints_the_built_payload_without_network_or_credentials(tmp_pat
     )
 
     result = subprocess.run(
-        [
-            sys.executable,
-            str(REPO_ROOT / "sync_to_strava.py"),
-            str(workout_file),
-            "--dry-run",
-        ],
+        [sys.executable, "-m", "liftostrava.cli.sync", str(workout_file), "--dry-run"],
         capture_output=True,
         text=True,
         check=True,
@@ -69,7 +61,8 @@ def test_dry_run_public_flag_disables_hide_from_home(tmp_path):
     result = subprocess.run(
         [
             sys.executable,
-            str(REPO_ROOT / "sync_to_strava.py"),
+            "-m",
+            "liftostrava.cli.sync",
             str(workout_file),
             "--dry-run",
             "--public",
@@ -113,8 +106,8 @@ def test_main_runs_the_full_upload_flow(tmp_path, monkeypatch, capsys):
             }
         )
     )
-    monkeypatch.setattr(sts, "ENV_PATH", str(_write_env(tmp_path)))
-    monkeypatch.setattr(sys, "argv", ["sync_to_strava.py", str(workout_file)])
+    monkeypatch.setattr(sync, "ENV_PATH", str(_write_env(tmp_path)))
+    monkeypatch.setattr(sys, "argv", ["sync-to-strava", str(workout_file)])
 
     responses.add(
         responses.POST,
@@ -141,7 +134,7 @@ def test_main_runs_the_full_upload_flow(tmp_path, monkeypatch, capsys):
         status=200,
     )
 
-    sts.main()
+    sync.main()
 
     out = capsys.readouterr().out
     assert "https://www.strava.com/activities/999" in out
@@ -158,10 +151,8 @@ def test_main_with_public_flag_skips_muting(tmp_path, monkeypatch, capsys):
             {"start_time": "2026-08-24T16:56:02Z", "elapsed_time": 100, "exercises": []}
         )
     )
-    monkeypatch.setattr(sts, "ENV_PATH", str(_write_env(tmp_path)))
-    monkeypatch.setattr(
-        sys, "argv", ["sync_to_strava.py", str(workout_file), "--public"]
-    )
+    monkeypatch.setattr(sync, "ENV_PATH", str(_write_env(tmp_path)))
+    monkeypatch.setattr(sys, "argv", ["sync-to-strava", str(workout_file), "--public"])
 
     responses.add(
         responses.POST,
@@ -182,7 +173,7 @@ def test_main_with_public_flag_skips_muting(tmp_path, monkeypatch, capsys):
         status=200,
     )
 
-    sts.main()
+    sync.main()
 
     out = capsys.readouterr().out
     assert "https://www.strava.com/activities/999" in out

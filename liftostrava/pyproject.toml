@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "liftostrava"
+version = "0.1.0"
+description = "Sync Liftosaur strength workouts to Strava"
+requires-python = ">=3.12"
+dependencies = [
+    "requests>=2.31.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0",
+    "responses>=0.26",
+    "pre-commit>=4.5",
+    "ruff>=0.16",
+]
+
+[project.scripts]
+sync-to-strava = "liftostrava.cli.sync:main"
+strava-auth = "liftostrava.cli.auth:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/liftostrava"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
