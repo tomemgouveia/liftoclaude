@@ -4,8 +4,10 @@ EXERCISE_TYPE_MAP entries (several of which were fixed in response to real
 the upper-snake-case fallback for anything not in the map.
 """
 
+import re
+
 import pytest
-from liftostrava.strava.exercise_map import exercise_type_for
+from liftostrava.strava.exercise_map import EXERCISE_TYPE_MAP, exercise_type_for
 
 
 @pytest.mark.parametrize(
@@ -37,3 +39,19 @@ def test_fallback_collapses_punctuation_runs_to_a_single_underscore():
 
 def test_fallback_strips_leading_and_trailing_punctuation_and_whitespace():
     assert exercise_type_for("  Weird!! Name--  ") == "WEIRD_NAME"
+
+
+@pytest.mark.parametrize("liftosaur_name,strava_value", EXERCISE_TYPE_MAP.items())
+def test_every_curated_mapping_is_a_well_formed_strava_enum_value(
+    liftosaur_name, strava_value
+):
+    # A structural guard over the whole map, not just the handful of
+    # entries spot-checked above: this is exactly the bug class the map's
+    # own comments describe recurring (an untrimmed equipment suffix
+    # leaving a stray comma/space in the enum value, rendering "Unknown"
+    # on Strava) — this catches it in any of the ~40 entries, not just the
+    # ones with a dedicated example test.
+    assert re.fullmatch(r"[A-Z][A-Z0-9_]*", strava_value), (
+        f"{liftosaur_name!r} maps to {strava_value!r}, which isn't "
+        "upper-snake-case — check it against developers.strava.com/docs/uploads/"
+    )

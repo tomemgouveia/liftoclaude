@@ -30,7 +30,9 @@ def test_upload_activity_sends_expected_form_fields_and_payload(sample_workout):
     assert result["id"] == 999
     sent = responses.calls[0].request
     assert sent.headers["Authorization"] == "Bearer token"
-    assert b'"version": "1.0"' in sent.body
+    body = sent.body
+    assert isinstance(body, bytes)
+    assert b'"version": "1.0"' in body
 
 
 @responses.activate
@@ -51,10 +53,11 @@ def test_upload_activity_uses_a_unique_filename_per_call(sample_workout):
     client.upload_activity("token", sample_workout, "WeightTraining")
     client.upload_activity("token", sample_workout, "WeightTraining")
 
-    filenames = [
-        call.request.body.split(b'filename="')[1].split(b'"')[0]
-        for call in responses.calls
-    ]
+    filenames = []
+    for call in responses.calls:
+        body = call.request.body
+        assert isinstance(body, bytes)
+        filenames.append(body.split(b'filename="')[1].split(b'"')[0])
     assert filenames[0] != filenames[1]
 
 
