@@ -83,7 +83,12 @@ def default_utc_offset(start_time_iso: str) -> int:
     time, computed at that specific instant so DST transitions (BST vs GMT)
     are handled correctly rather than baking in a fixed offset."""
     dt = datetime.fromisoformat(start_time_iso.replace("Z", "+00:00"))
-    return int(dt.astimezone(ATHLETE_TIMEZONE).utcoffset().total_seconds())
+    offset = dt.astimezone(ATHLETE_TIMEZONE).utcoffset()
+    # utcoffset() is typed as returning Optional[timedelta] since tzinfo is
+    # a general interface, but a zoneinfo-backed datetime always has one.
+    assert offset is not None
+    return int(offset.total_seconds())
+
 
 # Mapping from Liftosaur exercise names to Strava's exercise_type values.
 # Extend this as new exercises show up in your program. Anything not in
@@ -238,7 +243,12 @@ def upload_activity(access_token: str, workout: dict, sport_type: str) -> dict:
     return resp.json()
 
 
-def poll_upload(access_token: str, upload_id: int, timeout_s: int = 30) -> dict:
+def poll_upload(access_token: str, upload_id: int, timeout_s: float = 30) -> dict:
+    # Starts unset rather than only being assigned inside the loop: with a
+    # very small timeout_s the loop body can run zero times, and the
+    # TimeoutError below used to reference this while still unbound,
+    # raising a bare NameError instead of the intended TimeoutError.
+    status = None
     deadline = time.time() + timeout_s
     while time.time() < deadline:
         resp = requests.get(
@@ -252,9 +262,10 @@ def poll_upload(access_token: str, upload_id: int, timeout_s: int = 30) -> dict:
         if status.get("activity_id"):
             return status
         time.sleep(1)
+    last_status = status.get("status") if status else None
     raise TimeoutError(
         f"Upload didn't finish processing in time (last status: "
-        f"{status.get('status')!r}) — check strava.com manually, it may "
+        f"{last_status!r}) — check strava.com manually, it may "
         f"still complete."
     )
 
@@ -325,6 +336,12 @@ def main():
     if not all([client_id, client_secret, refresh_token]):
         print("Missing Strava credentials in .env. Run strava_auth.py first.")
         sys.exit(1)
+    # The all([...]) check above guarantees none of these are None, but the
+    # type checker can't narrow through a dynamically-built list — spell it
+    # out so the str | None from os.getenv() doesn't propagate further.
+    assert client_id is not None
+    assert client_secret is not None
+    assert refresh_token is not None
 
     print("Refreshing access token...")
     access_token = refresh_access_token(client_id, client_secret, refresh_token)
