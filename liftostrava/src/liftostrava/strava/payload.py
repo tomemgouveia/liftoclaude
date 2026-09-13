@@ -22,6 +22,10 @@ from liftostrava.strava.exercise_map import exercise_type_for
 # changes.
 ATHLETE_TIMEZONE = ZoneInfo("Europe/London")
 
+# Strava's upload format has always expected weight in kg here, regardless
+# of what unit the source recorded a set in.
+LB_TO_KG = 0.45359237
+
 
 def default_utc_offset(start_time_iso: str) -> int:
     """Seconds to add to a UTC start_time to get ATHLETE_TIMEZONE's local
@@ -42,11 +46,12 @@ def build_strava_payload(workout: Workout) -> dict:
     for exercise in workout.exercises:
         ex_type = exercise_type_for(exercise.name)
         for s in exercise.sets:
+            weight_kg = s.weight * LB_TO_KG if s.unit == "lb" else s.weight
             sets.append(
                 {
                     "exercise_type": ex_type,
                     "repetitions": s.reps,
-                    "weight": s.weight_kg,
+                    "weight": weight_kg,
                     "start_time": workout.start_time,
                 }
             )

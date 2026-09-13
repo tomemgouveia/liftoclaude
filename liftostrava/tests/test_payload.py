@@ -7,6 +7,7 @@ UTC+0.
 """
 
 import pytest
+from liftostrava.models import Exercise, Set, Workout
 from liftostrava.strava.payload import build_strava_payload, default_utc_offset
 
 
@@ -56,3 +57,27 @@ def test_build_strava_payload_top_level_fields(sample_workout):
     assert payload["version"] == "1.0"
     assert payload["start_time"] == sample_workout.start_time
     assert payload["elapsed_time"] == sample_workout.elapsed_time
+
+
+def test_build_strava_payload_converts_lb_sets_to_kg():
+    # Strava's own "weight" field has always been kg here — a set
+    # recorded in lb (only possible via sources/api.py's Liftohistory
+    # parser, since mcp_export.py's JSON wire format is always weight_kg)
+    # must be converted before it's emitted.
+    workout = Workout(
+        start_time="2026-01-15T10:00:00Z",
+        elapsed_time=100,
+        exercises=[Exercise(name="Squat", sets=[Set(reps=5, weight=100, unit="lb")])],
+    )
+    payload = build_strava_payload(workout)
+    assert payload["sets"][0]["weight"] == pytest.approx(45.359237)
+
+
+def test_build_strava_payload_leaves_kg_sets_unconverted():
+    workout = Workout(
+        start_time="2026-01-15T10:00:00Z",
+        elapsed_time=100,
+        exercises=[Exercise(name="Squat", sets=[Set(reps=5, weight=60, unit="kg")])],
+    )
+    payload = build_strava_payload(workout)
+    assert payload["sets"][0]["weight"] == 60

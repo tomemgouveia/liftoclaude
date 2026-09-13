@@ -6,12 +6,19 @@ Usage:
     sync-to-strava workouts/2026-08-24T165602Z-fierce-5-workout-a.json
     sync-to-strava workouts/2026-08-24T165602Z-fierce-5-workout-a.json --public
     sync-to-strava workouts/2026-08-24T165602Z-fierce-5-workout-a.json --dry-run
+    sync-to-strava --from-api 1789147805585
+    sync-to-strava --from-api 1789147805585 --dry-run
 
-Today the only input route is a JSON file (see
-liftostrava.sources.mcp_export and the sample at
-liftostrava/tests/fixtures/sample_workout.json for its shape) — the one
-CLAUDE.md in the repo root instructs Claude to write after pulling a
-record from the Liftosaur MCP server.
+Two input routes:
+
+  - A JSON file (see liftostrava.sources.mcp_export and the sample at
+    liftostrava/tests/fixtures/sample_workout.json for its shape) — the
+    one CLAUDE.md in the repo root instructs Claude to write after
+    pulling a record from the Liftosaur MCP server, for when no
+    LIFTOSAUR_API_KEY is configured.
+  - `--from-api RECORD_ID`, which fetches and parses the record directly
+    from Liftosaur's REST API (see liftostrava.sources.api) — requires
+    Premium and LIFTOSAUR_API_KEY in .env. No JSON file involved.
 
 --- Important caveats (read before relying on this) ---
 
@@ -43,6 +50,7 @@ import sys
 from dotenv import load_dotenv
 
 from liftostrava.config import ENV_PATH
+from liftostrava.sources.api import LiftosaurApiSource
 from liftostrava.sources.mcp_export import McpExportSource
 from liftostrava.strava.auth import refresh_access_token
 from liftostrava.strava.client import (
@@ -58,7 +66,14 @@ def main():
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("workout_file", help="Path to a workout JSON file")
+    parser.add_argument("workout_file", nargs="?", help="Path to a workout JSON file")
+    parser.add_argument(
+        "--from-api",
+        metavar="RECORD_ID",
+        help="Fetch and parse the workout directly from Liftosaur's REST "
+        "API instead of a JSON file (requires Premium and "
+        "LIFTOSAUR_API_KEY in .env). Alternative to workout_file.",
+    )
     parser.add_argument(
         "--sport-type",
         default="WeightTraining",
@@ -79,7 +94,18 @@ def main():
     )
     args = parser.parse_args()
 
-    workout = McpExportSource(args.workout_file).load()
+    if bool(args.workout_file) == bool(args.from_api):
+        parser.error("Provide exactly one of workout_file or --from-api")
+
+    # Needed before loading the workout: --from-api reads LIFTOSAUR_API_KEY
+    # from .env at load time, dry-run or not. Harmless no-op for the
+    # workout_file route, which doesn't consume any env vars.
+    load_dotenv(ENV_PATH)
+
+    if args.from_api:
+        workout = LiftosaurApiSource(args.from_api).load()
+    else:
+        workout = McpExportSource(args.workout_file).load()
 
     if args.dry_run:
         print("Would upload the following to Strava (--dry-run, nothing sent):\n")
@@ -95,7 +121,6 @@ def main():
         )
         return
 
-    load_dotenv(ENV_PATH)
     client_id = os.getenv("STRAVA_CLIENT_ID")
     client_secret = os.getenv("STRAVA_CLIENT_SECRET")
     refresh_token = os.getenv("STRAVA_REFRESH_TOKEN")
