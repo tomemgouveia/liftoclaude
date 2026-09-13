@@ -1,4 +1,11 @@
 [flake8]
+# This project's own enforced lint/format tool is ruff (see
+# .pre-commit-config.yaml and pyproject.toml's dev extra) — flake8 isn't
+# installed or run by anything here. This file exists only to configure
+# whatever flake8 copy an editor's own linter extension happens to run
+# (several editors bundle one), so its diagnostics agree with ruff's
+# choices instead of fighting them.
+#
 # Match ruff format's line length (ruff's default, and one of this
 # project's own tools now) rather than flake8's stock 79.
 max-line-length = 88

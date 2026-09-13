@@ -45,7 +45,7 @@ yesterday's workout to Strava", "sync my last session"):
    ```
 
    (If the `liftostrava` package isn't installed into the active
-   environment yet, run `pip install -e ./liftostrava[dev]` from the
+   environment yet, run `pip install -e "./liftostrava[dev]"` from the
    repo root first — see `README.md`.)
 
    By default this mutes the activity from Strava's home feed

@@ -12,6 +12,23 @@ from liftostrava.models import Workout
 from liftostrava.strava.payload import build_strava_payload
 
 
+def strava_form_fields(workout: Workout, sport_type: str) -> dict:
+    """The non-file form fields sent with an upload — also used by
+    cli/sync.py's --dry-run preview, so the two can't silently diverge.
+
+    Falls back to a default name/description only when the workout truly
+    has none (`None`), not merely an empty string — matching how a plain
+    dict's `.get(key, default)` used to behave before Workout became a
+    dataclass, which `x or default` would silently *not* preserve for an
+    explicitly empty value."""
+    return {
+        "data_type": "json",
+        "sport_type": sport_type,
+        "name": workout.name if workout.name is not None else "Strength Workout",
+        "description": workout.description if workout.description is not None else "",
+    }
+
+
 def upload_activity(access_token: str, workout: Workout, sport_type: str) -> dict:
     payload = build_strava_payload(workout)
     # Strava dedupes uploads by external_id (derived from the filename here):
@@ -28,12 +45,7 @@ def upload_activity(access_token: str, workout: Workout, sport_type: str) -> dic
     files = {
         "file": (filename, json.dumps(payload), "application/json"),
     }
-    data = {
-        "data_type": "json",
-        "sport_type": sport_type,
-        "name": workout.name or "Strength Workout",
-        "description": workout.description or "",
-    }
+    data = strava_form_fields(workout, sport_type)
     resp = requests.post(
         "https://www.strava.com/api/v3/uploads",
         headers={"Authorization": f"Bearer {access_token}"},

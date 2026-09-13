@@ -9,11 +9,39 @@ bugfixed deliberately and would be easy to lose in a refactor:
   - poll_upload distinguishes "still processing" from an error response
     from a resolved activity_id, and times out rather than hanging forever
     (or raising a bare NameError — see the comment in client.py).
+  - strava_form_fields preserves an explicitly empty name/description
+    rather than treating it the same as a missing one — a `workout.name
+    or "Strength Workout"` version of this would silently discard "".
 """
 
 import pytest
 import responses
+from liftostrava.models import Workout
 from liftostrava.strava import client
+
+
+def test_strava_form_fields_defaults_a_missing_name_and_description():
+    workout = Workout(start_time="2026-01-15T10:00:00Z", elapsed_time=100, exercises=[])
+
+    fields = client.strava_form_fields(workout, "WeightTraining")
+
+    assert fields["name"] == "Strength Workout"
+    assert fields["description"] == ""
+
+
+def test_strava_form_fields_preserves_an_explicitly_empty_name_and_description():
+    workout = Workout(
+        start_time="2026-01-15T10:00:00Z",
+        elapsed_time=100,
+        exercises=[],
+        name="",
+        description="",
+    )
+
+    fields = client.strava_form_fields(workout, "WeightTraining")
+
+    assert fields["name"] == ""
+    assert fields["description"] == ""
 
 
 @responses.activate

@@ -45,7 +45,12 @@ from dotenv import load_dotenv
 from liftostrava.config import ENV_PATH
 from liftostrava.sources.mcp_export import McpExportSource
 from liftostrava.strava.auth import refresh_access_token
-from liftostrava.strava.client import poll_upload, set_muted, upload_activity
+from liftostrava.strava.client import (
+    poll_upload,
+    set_muted,
+    strava_form_fields,
+    upload_activity,
+)
 from liftostrava.strava.payload import build_strava_payload
 
 
@@ -75,20 +80,14 @@ def main():
     args = parser.parse_args()
 
     workout = McpExportSource(args.workout_file).load()
-    payload = build_strava_payload(workout)
 
     if args.dry_run:
         print("Would upload the following to Strava (--dry-run, nothing sent):\n")
         print(
             json.dumps(
                 {
-                    "form_fields": {
-                        "data_type": "json",
-                        "sport_type": args.sport_type,
-                        "name": workout.name or "Strength Workout",
-                        "description": workout.description or "",
-                    },
-                    "file_content": payload,
+                    "form_fields": strava_form_fields(workout, args.sport_type),
+                    "file_content": build_strava_payload(workout),
                     "hide_from_home_after_upload": not args.public,
                 },
                 indent=2,
