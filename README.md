@@ -33,10 +33,12 @@ liftostrava/
 │   ├── models.py        # Set, Exercise, Workout — the normalized shape
 │   ├── sources/         # how a workout gets into the system
 │   │   ├── base.py          # WorkoutSource protocol
-│   │   └── mcp_export.py    # today's route: the JSON file written after
-│   │                        # an MCP call (see CLAUDE.md) — a second
-│   │                        # route (e.g. calling Liftosaur's REST API
-│   │                        # directly) can sit alongside this later
+│   │   ├── mcp_export.py    # JSON file written after an MCP call (see
+│   │   │                    # CLAUDE.md) — the fallback when no
+│   │   │                    # LIFTOSAUR_API_KEY is configured
+│   │   ├── liftohistory.py  # pure text parser: Liftohistory -> Workout
+│   │   └── api.py           # hits Liftosaur's REST API directly, no
+│   │                        # agent/JSON file involved (--from-api)
 │   ├── strava/           # everything Strava-facing
 │   │   ├── exercise_map.py  # Liftosaur name -> Strava exercise_type
 │   │   ├── payload.py       # Workout -> Strava's upload JSON
@@ -89,6 +91,9 @@ bare domain). That wildcard covers both hosts this project needs:
    cp .env.example .env
    ```
    Fill in `STRAVA_CLIENT_ID` and `STRAVA_CLIENT_SECRET` in `.env`.
+   Optionally also fill in `LIFTOSAUR_API_KEY` (requires Liftosaur
+   Premium; generate at Settings > API Keys) to enable `--from-api`
+   below — without it, syncing falls back to the MCP + JSON-file flow.
 
 4. **Authorize once**
    ```
@@ -115,15 +120,30 @@ It'll print the resulting activity URL when done.
 ## Normal usage (via Claude Code)
 
 Point Claude Code at this project (it reads `CLAUDE.md` automatically)
-and just ask it to sync a workout — it'll pull the data from your
-connected Liftosaur MCP, shape it into the JSON `sync-to-strava`
-expects, and run the upload for you.
+and just ask it to sync a workout. What happens next depends on
+whether `LIFTOSAUR_API_KEY` is configured:
 
-Each synced workout is written to `workouts/` as its own timestamped
-file (e.g. `workouts/2026-08-24T165602Z-fierce-5-workout-a.json`)
-rather than overwriting a single shared file, so past syncs stay
-around as a record. You can also build/edit one by hand — see
-`liftostrava/tests/fixtures/sample_workout.json` for the shape.
+- **With a key**: Claude uses the Liftosaur MCP's `get_history` only to
+  find which record ID matches what you asked for, then runs
+  `sync-to-strava --from-api <id>` directly — no JSON file, no
+  hand-transcription.
+- **Without one**: the original flow — Claude pulls the record from
+  Liftosaur MCP and hand-transcribes it into a JSON file matching the
+  shape `sync-to-strava` expects, then runs that.
+
+  Each synced workout in this fallback flow is written to `workouts/`
+  as its own timestamped file (e.g.
+  `workouts/2026-08-24T165602Z-fierce-5-workout-a.json`) rather than
+  overwriting a single shared file, so past syncs stay around as a
+  record. You can also build/edit one by hand — see
+  `liftostrava/tests/fixtures/sample_workout.json` for the shape.
+
+You can also invoke `--from-api` directly if you already know the
+record ID (e.g. from `get_history`'s output):
+```
+sync-to-strava --from-api 1789147805585
+sync-to-strava --from-api 1789147805585 --dry-run
+```
 
 ## Privacy — please read
 

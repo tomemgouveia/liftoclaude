@@ -1,15 +1,17 @@
 """The normalized shape every WorkoutSource produces and everything in
-strava/ consumes, independent of how the data arrived (today: a JSON file
-written after an MCP call — see sources/mcp_export.py; later: a direct
-Liftosaur REST API call)."""
+strava/ consumes, independent of how the data arrived: a JSON file
+written after an MCP call (sources/mcp_export.py) or a direct Liftosaur
+REST API call (sources/api.py)."""
 
 from dataclasses import dataclass
+from typing import Literal
 
 
 @dataclass
 class Set:
     reps: int
-    weight_kg: float
+    weight: float
+    unit: Literal["kg", "lb"] = "kg"
 
 
 @dataclass

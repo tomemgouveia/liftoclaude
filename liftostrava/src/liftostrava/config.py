@@ -12,3 +12,6 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ENV_PATH = REPO_ROOT / ".env"
+# CLAUDE.md's scratch space for hand-transcribed workout JSON files (see
+# sources/mcp_export.py's list_history) — gitignored, not an archive.
+WORKOUTS_DIR = REPO_ROOT / "workouts"
