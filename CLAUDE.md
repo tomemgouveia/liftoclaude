@@ -10,7 +10,7 @@ yesterday's workout to Strava", "sync my last session"):
 
    ```json
    {
-     "name": "<program> - <dayName>",
+     "name": "<Lower|Balanced|Upper> Body Workout",
      "start_time": "<ISO 8601 UTC timestamp from the record>",
      "elapsed_time": <duration in seconds>,
      "description": "Synced from Liftosaur",
@@ -19,6 +19,14 @@ yesterday's workout to Strava", "sync my last session"):
      ]
    }
    ```
+
+   `name` is derived from the day name of the L/B/U program:
+
+   | dayName  | name                  |
+   | -------- | --------------------- |
+   | Lower    | Lower Body Workout    |
+   | Balanced | Balanced Body Workout |
+   | Upper    | Upper Body Workout    |
 
    Important: only include **completed/actual** sets (the numbers the
    user actually logged), not the `warmup:` or `target:` sets from the
