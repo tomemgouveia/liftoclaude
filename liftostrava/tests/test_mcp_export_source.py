@@ -59,3 +59,54 @@ def test_load_respects_an_explicit_utc_offset(tmp_path):
     workout = McpExportSource(workout_file).load()
 
     assert workout.utc_offset == 3600
+
+
+def _write_workout(directory, filename, start_time):
+    (directory / filename).write_text(
+        json.dumps({"start_time": start_time, "elapsed_time": 100, "exercises": []})
+    )
+
+
+def test_list_history_returns_every_file_newest_first(tmp_path):
+    _write_workout(tmp_path, "a.json", "2026-09-07T07:20:12Z")
+    _write_workout(tmp_path, "b.json", "2026-09-11T17:30:05Z")
+    _write_workout(tmp_path, "c.json", "2026-09-09T06:37:54Z")
+
+    entries = McpExportSource.list_history(directory=tmp_path)
+
+    assert [e.workout.start_time for e in entries] == [
+        "2026-09-11T17:30:05Z",
+        "2026-09-09T06:37:54Z",
+        "2026-09-07T07:20:12Z",
+    ]
+
+
+def test_list_history_filters_by_date_range_inclusive(tmp_path):
+    _write_workout(tmp_path, "a.json", "2026-09-07T07:20:12Z")
+    _write_workout(tmp_path, "b.json", "2026-09-09T06:37:54Z")
+    _write_workout(tmp_path, "c.json", "2026-09-11T17:30:05Z")
+
+    entries = McpExportSource.list_history(
+        start_date="2026-09-08", end_date="2026-09-11T17:30:05Z", directory=tmp_path
+    )
+
+    assert [e.workout.start_time for e in entries] == [
+        "2026-09-11T17:30:05Z",
+        "2026-09-09T06:37:54Z",
+    ]
+
+
+def test_list_history_returns_empty_list_for_a_missing_directory(tmp_path):
+    assert McpExportSource.list_history(directory=tmp_path / "does-not-exist") == []
+
+
+def test_list_history_entry_identifier_reloads_the_same_workout(tmp_path):
+    _write_workout(tmp_path, "only.json", "2026-09-11T17:30:05Z")
+
+    [entry] = McpExportSource.list_history(directory=tmp_path)
+
+    assert entry.identifier == str(tmp_path / "only.json")
+    assert entry.workout.start_time == "2026-09-11T17:30:05Z"
+    # The whole point of `identifier`: it round-trips back into the same
+    # source constructor to reload the same workout.
+    assert McpExportSource(entry.identifier).load() == entry.workout

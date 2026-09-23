@@ -3,6 +3,51 @@
 When the user asks to sync a Liftosaur workout to Strava (e.g. "push
 yesterday's workout to Strava", "sync my last session"):
 
+**First, check whether `LIFTOSAUR_API_KEY` is set in `.env`** (repo
+root). That determines which of the two flows below to use.
+
+## Flow A — `LIFTOSAUR_API_KEY` is set (preferred)
+
+1. Use the Liftosaur MCP's `get_history` to find which record matches
+   what the user asked for (match by date/program/dayName as needed).
+   You only need this to resolve the record's **ID** — no
+   transcription, no JSON file.
+
+2. Run the CLI directly against that ID:
+
+   ```
+   sync-to-strava --from-api <id>
+   ```
+
+   (If the `liftostrava` package isn't installed into the active
+   environment yet, run `pip install -e "./liftostrava[dev]"` from the
+   repo root first — see `README.md`.)
+
+   This fetches the record from Liftosaur's REST API and parses it
+   itself (see `liftostrava/src/liftostrava/sources/api.py` and
+   `sources/liftohistory.py`) — completed vs. `warmup:`/`target:` sets,
+   unit handling, etc. are all handled in code, not by you.
+
+   By default this mutes the activity from Strava's home feed
+   (`hide_from_home`), but see the privacy caveat in
+   `liftostrava/src/liftostrava/cli/sync.py`'s docstring and
+   `README.md` — that is NOT the same as "Only You" visibility, which
+   the Strava API cannot set. Pass `--public` only if the user
+   explicitly asks not to mute it. If the user wants a true "Only You"
+   default, tell them to set that in the Strava app itself (Settings >
+   Privacy Controls > Activities) — this only needs doing once, and
+   then every upload (from this tool or anywhere else) inherits it
+   automatically.
+
+3. Report back the activity URL from the CLI's output.
+
+If `sync-to-strava` reports missing Strava credentials, tell the user
+to run `strava-auth` once first (see the note at the bottom of this
+file). If it reports a missing/invalid `LIFTOSAUR_API_KEY`, fall back
+to Flow B for this request and mention the key needs fixing.
+
+## Flow B — no `LIFTOSAUR_API_KEY` (fallback)
+
 1. Use the Liftosaur MCP tools (`get_history` or `get_history_record`)
    to fetch the relevant workout. Match by date if the user gave one.
 
@@ -74,7 +119,9 @@ yesterday's workout to Strava", "sync my last session"):
 
 5. Report back the activity URL from the CLI's output.
 
-If credentials are missing (`sync-to-strava` will say so), tell the
-user to run `strava-auth` once first — that's an interactive,
+## Credentials
+
+If Strava credentials are missing (`sync-to-strava` will say so), tell
+the user to run `strava-auth` once first — that's an interactive,
 one-time step they need to do themselves (it opens a browser
 authorization flow), not something to automate on their behalf.
