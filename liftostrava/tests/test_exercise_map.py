@@ -20,6 +20,7 @@ from liftostrava.strava.exercise_map import EXERCISE_TYPE_MAP, exercise_type_for
         ("Standing Calf Raise, Leverage Machine", "STANDING_CALF_RAISE"),
         ("Incline Crunch", "DECLINE_CRUNCH"),
         ("Pull Up", "PULL_UP_GENERIC"),
+        ("Seated Row - Leverage Machine", "MACHINE_CHEST_SUPPORTED_ROW"),
         ("Seated Leg Press", "LEG_PRESS"),
         ("Triceps Extension, Cable", "CABLE_OVERHEAD_TRICEPS_EXTENSION"),
     ],
