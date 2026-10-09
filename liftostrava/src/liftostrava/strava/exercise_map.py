@@ -42,9 +42,10 @@ EXERCISE_TYPE_MAP = {
     "Bicep Curl, Cable": "CABLE_BICEPS_CURL",  # docs — unverified by upload
     "Hammer Curl": "DUMBBELL_HAMMER_CURL",  # docs
     "Triceps Pushdown": "TRICEPS_PRESSDOWN",  # docs (Strava calls it "pressdown", not "pushdown")
-    "Triceps Extension, Cable": "CABLE_TRICEPS_PUSHDOWN",  # docs — closest generic cable option in Strava's Triceps Extension list; unverified by upload, distinct from "Triceps Pushdown" above (Liftosaur models them as separate exercises)
+    "Triceps Extension, Cable": "CABLE_OVERHEAD_TRICEPS_EXTENSION",  # docs + upload (activity 20295834556) — previous value CABLE_TRICEPS_PUSHDOWN rendered as "Triceps Push Down", which the user confirmed was wrong: their movement is an overhead extension, not a pushdown (that's "Triceps Pushdown" above, a distinct Liftosaur exercise)
     "Skullcrusher": "SKULL_CRUSHER",  # docs + upload (activity 20011321395) — old value LYING_TRICEPS_EXTENSION wasn't in Strava's Triceps Extension list at all
     "Leg Press": "LEG_PRESS",  # docs
+    "Seated Leg Press": "LEG_PRESS",  # docs — Strava's Leg Press category has only one exercise_type; the unmapped "Seated" prefix previously fell through to the fallback and rendered "Unknown" (activity 20295834556), user fixed it in-app to "Leg Press"
     "Standing Calf Raise": "STANDING_CALF_RAISE",  # docs
     "Standing Calf Raise, Cable": "STANDING_CALF_RAISE",  # docs + upload (activity 19977181952) — the untrimmed ", Cable" equipment suffix isn't in this map and the old fallback left a comma in the enum value, which rendered "Unknown"; user fixed it in-app to "Standing Calf Raise"
     "Standing Calf Raise, Leverage Machine": "STANDING_CALF_RAISE",  # docs + upload (activity 20070453899) — same untrimmed-suffix issue as the Cable variant above; rendered "Unknown", user confirmed it's the same machine as the plain "Standing Calf Raise" entry
