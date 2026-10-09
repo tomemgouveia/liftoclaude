@@ -62,7 +62,7 @@ EXERCISE_TYPE_MAP = {
     "Hip Abductor - Machine": "MACHINE_HIP_ABDUCTION",  # docs + upload (activity 20011184163); user's custom exercise
     "Hip Adductor - Machine": "MACHINE_HIP_ADDUCTION",  # docs + upload (activity 20011184163); user's custom exercise
     "Incline Row": "CHEST_SUPPORTED_ROW",  # docs + upload (activity 20011184163); replaces Pendlay Row in the L/S/U program
-    "Seated Row - Leverage Machine": "CHEST_SUPPORTED_ROW",  # docs + upload (activity 20517932538) — old fallback value SEATED_ROW_LEVERAGE_MACHINE wasn't in Strava's list; user fixed it in-app to "Machine Chest-Supported Row"
+    "Seated Row - Leverage Machine": "MACHINE_CHEST_SUPPORTED_ROW",  # docs + upload (activity 20517932538) — old fallback value SEATED_ROW_LEVERAGE_MACHINE wasn't in Strava's list; user fixed it in-app to "Machine Chest-Supported Row". Distinct from the plain CHEST_SUPPORTED_ROW used for Incline Row above (non-machine) — a test sync with CHEST_SUPPORTED_ROW rendered just "Chest-Supported Row", confirmed wrong for this machine exercise.
     "Scapular Pull Up": "NEGATIVE_PULL_UP",  # placeholder — no dedicated Strava exercise type for this exists; user asked to map it to Negative Pull Up (itself a documented, confirmed value) until Strava adds one
     "Negative Pull Up": "NEGATIVE_PULL_UP",  # docs + upload (activity 20011184163)
     "Pull Up": "PULL_UP_GENERIC",  # docs + upload (activity 20011321395) — old value STANDARD_PULL_UP had confirmed "Unknown" on an isolated real upload (activity 20011260255); rendered exactly as "Pull Up", matching the user's own reference activity
