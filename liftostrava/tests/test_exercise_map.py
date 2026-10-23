@@ -23,6 +23,7 @@ from liftostrava.strava.exercise_map import EXERCISE_TYPE_MAP, exercise_type_for
         ("Seated Row - Leverage Machine", "MACHINE_CHEST_SUPPORTED_ROW"),
         ("Seated Leg Press", "LEG_PRESS"),
         ("Triceps Extension, Cable", "CABLE_OVERHEAD_TRICEPS_EXTENSION"),
+        ("Skullcrusher, Dumbbell", "DUMBBELL_SKULLCRUSHER"),
     ],
 )
 def test_known_mapping(name, expected):

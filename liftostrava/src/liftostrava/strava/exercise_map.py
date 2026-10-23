@@ -44,6 +44,7 @@ EXERCISE_TYPE_MAP = {
     "Triceps Pushdown": "TRICEPS_PRESSDOWN",  # docs (Strava calls it "pressdown", not "pushdown")
     "Triceps Extension, Cable": "CABLE_OVERHEAD_TRICEPS_EXTENSION",  # docs + upload (activity 20295834556) — previous value CABLE_TRICEPS_PUSHDOWN rendered as "Triceps Push Down", which the user confirmed was wrong: their movement is an overhead extension, not a pushdown (that's "Triceps Pushdown" above, a distinct Liftosaur exercise)
     "Skullcrusher": "SKULL_CRUSHER",  # docs + upload (activity 20011321395) — old value LYING_TRICEPS_EXTENSION wasn't in Strava's Triceps Extension list at all
+    "Skullcrusher, Dumbbell": "DUMBBELL_SKULLCRUSHER",  # docs + upload (activity 20705460781) — distinct Liftosaur exercise from the bare "Skullcrusher" above (barbell); was previously unmapped and falling back to SKULLCRUSHER_DUMBBELL (wrong token order, not in Strava's docs), which happened to still render correctly via Strava's apparent order-tolerant matching, but that's not guaranteed — mapped explicitly to the documented value instead of relying on it
     "Leg Press": "LEG_PRESS",  # docs
     "Seated Leg Press": "LEG_PRESS",  # docs — Strava's Leg Press category has only one exercise_type; the unmapped "Seated" prefix previously fell through to the fallback and rendered "Unknown" (activity 20295834556), user fixed it in-app to "Leg Press"
     "Standing Calf Raise": "STANDING_CALF_RAISE",  # docs
