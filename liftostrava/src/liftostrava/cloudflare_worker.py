@@ -1,8 +1,8 @@
 from workers import WorkerEntrypoint, Response
 
-from liftostrava.sources.liftosaur import LiftosaurSource
-from liftostrava.strava.client import StravaClient
-from liftostrava.strava.payload import build_strava_payload
+from sources.liftosaur import LiftosaurSource
+from strava.client import StravaClient
+from strava.payload import build_strava_payload
 
 
 class Default(WorkerEntrypoint):
