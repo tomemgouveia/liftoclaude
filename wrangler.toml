@@ -1,4 +1,0 @@
-name = "liftosaur-strava-sync"
-main = "liftostrava/src/liftostrava/cloudflare_worker.py"
-compatibility_date = "2026-09-01"
-compatibility_flags = ["python_workers"]
