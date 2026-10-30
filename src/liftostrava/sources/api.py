@@ -94,13 +94,19 @@ class LiftosaurApiSource:
         return entries
 
     def get_workout(self, workout_id: str) -> WorkoutEntry:
-        """Fetch a single workout by its Liftosaur history ID, returning a
-        WorkoutEntry object.
-        """
-        headers = {"Authorization": f"Bearer {self.api_key}"}
-        resp = requests.get(f"{API_BASE}/history/{workout_id}", headers=headers)
-        resp.raise_for_status()
-        record = resp.json()["data"]
+        response = requests.get(
+            f"{API_BASE}/history/",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            timeout=30,
+        )
         return WorkoutEntry(
-            id=str(record["id"]), workout=parse_liftohistory(record["text"])
+            id=workout_id,
+            workout=parse_liftohistory(
+                next(
+                    filter(
+                        lambda x: x["id"] == workout_id,
+                        response.json()["data"]["records"],
+                    )
+                )["text"]
+            ),
         )

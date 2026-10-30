@@ -7,7 +7,11 @@ name = "liftostrava"
 version = "0.1.0"
 description = "Sync Liftosaur strength workouts to Strava"
 requires-python = ">=3.11"
-dependencies = ["requests>=2.31.0", "python-dotenv>=1.0.0"]
+dependencies = [
+    "requests>=2.31.0",
+    "python-dotenv>=1.0.0",
+    "tzdata>=2025.2",
+]
 
 [dependency-groups]
 dev = [
