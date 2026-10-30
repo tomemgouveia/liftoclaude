@@ -4,3 +4,8 @@
 .ruff_cache
 .DS_Store
 workouts/*.json
+.venv-workers/
+.dev.vars
+python_modules/
+pylock.toml
+*sandbox*.*

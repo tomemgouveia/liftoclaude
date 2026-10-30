@@ -27,6 +27,8 @@ config/data, not code:
 ```
 .
 ├── pyproject.toml
+├── Dockerfile
+├── src/cloudflare_worker.py  # Cloudflare Worker entrypoint
 ├── src/liftostrava/
 │   ├── models.py        # Set, Exercise, Workout — the normalized shape
 │   ├── sources/         # how a workout gets into the system
@@ -116,6 +118,40 @@ Once your `.env` is set up, do a real upload:
 uv run sync-to-strava tests/fixtures/sample_workout.json
 ```
 It'll print the resulting activity URL when done.
+
+## Run the Cloudflare Worker locally with Docker
+
+The Docker image runs Pywrangler's local Worker runtime; it does not
+deploy anything. Build and start it from the repository root:
+
+```
+docker build -t liftosaur-worker .
+docker run --rm -p 8787:8787 \
+  --mount "type=bind,source=$(pwd)/src,target=/app/src" \
+  --mount "type=bind,source=$(pwd)/src/liftostrava,target=/app/python_modules/liftostrava" \
+  liftosaur-worker
+```
+
+Then send a request to `http://localhost:8787/`, for example:
+
+```
+curl -i http://localhost:8787/
+```
+
+The source mount lets you edit the Worker without rebuilding the image.
+To exercise the GET handler, create a local `.dev.vars` file with
+`LIFTOSAUR_API_KEY=...` and mount it into the container:
+
+```
+docker run --rm -p 8787:8787 \
+  --mount "type=bind,source=$(pwd)/src,target=/app/src" \
+  --mount "type=bind,source=$(pwd)/src/liftostrava,target=/app/python_modules/liftostrava" \
+  --mount "type=bind,source=$(pwd)/.dev.vars,target=/app/.dev.vars,readonly" \
+  liftosaur-worker
+```
+
+`.dev.vars` is gitignored and excluded from the Docker build context.
+The GET handler makes a live request to Liftosaur's API.
 
 ## Normal usage (via Claude Code)
 
