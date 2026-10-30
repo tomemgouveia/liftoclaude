@@ -57,7 +57,9 @@ def _parse_set_groups(segment: str) -> list[Set]:
     for group in segment.split(", "):
         match = SET_GROUP_RE.match(group.strip())
         if not match:
-            raise ValueError(f"Unrecognized set group: {group!r}")
+            raise ValueError(
+                f"Unrecognized set group: {group!r}\nFull segment: {segment!r} "
+            )
         count = int(match.group("count"))
         reps = int(match.group("reps"))
         weight = float(match.group("weight"))
@@ -117,7 +119,11 @@ def parse_liftohistory(text: str) -> Workout:
             ),
             None,
         )
-        sets = _parse_set_groups(completed_segment) if completed_segment else []
+        try:
+            sets = _parse_set_groups(completed_segment) if completed_segment else []
+        except ValueError as e:
+            print(f"Error parsing exercise '{exercise_name}': {e}")
+            sets = []
         exercises.append(Exercise(name=exercise_name, sets=sets))
 
     return Workout(

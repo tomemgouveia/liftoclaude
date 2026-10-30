@@ -15,6 +15,7 @@ confirmed against https://www.liftosaur.com/doc/api on 2026-09-13.
 """
 
 import os
+from datetime import datetime
 
 import requests
 
@@ -52,7 +53,7 @@ class LiftosaurApiSource:
 
     @staticmethod
     def list_history(
-        start_date: str | None = None, end_date: str | None = None
+        start_date: datetime | str | None = None, end_date: datetime | str | None = None
     ) -> list[WorkoutEntry]:
         """List every workout in Liftosaur's history, newest first,
         optionally restricted to a `[start_date, end_date]` range (either
