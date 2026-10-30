@@ -92,3 +92,15 @@ class LiftosaurApiSource:
                 break
             cursor = str(data["nextCursor"])
         return entries
+
+    def get_workout(self, workout_id: str) -> WorkoutEntry:
+        """Fetch a single workout by its Liftosaur history ID, returning a
+        WorkoutEntry object.
+        """
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        resp = requests.get(f"{API_BASE}/history/{workout_id}", headers=headers)
+        resp.raise_for_status()
+        record = resp.json()["data"]
+        return WorkoutEntry(
+            id=str(record["id"]), workout=parse_liftohistory(record["text"])
+        )
