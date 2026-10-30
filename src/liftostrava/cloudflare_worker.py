@@ -1,3 +1,4 @@
+import requests
 from workers import Response, WorkerEntrypoint
 
 # from sources.liftosaur import LiftosaurSource
@@ -6,14 +7,16 @@ from workers import Response, WorkerEntrypoint
 
 
 class Default(WorkerEntrypoint):
-    async def fetch(self, request):
+    async def fetch(self, request: requests.Request) -> Response:
         match request.method:
             case "POST":
                 return await self.handle_post(request)
+            case "GET":
+                return await self.handle_get(request)
             case _:
                 return Response("Method Not Allowed", status=405)
 
-    async def handle_post(self, request):
+    async def handle_post(self, request: requests.Request) -> Response:
         try:
             # # 1. Fetch latest workout session using LiftosaurSource
             # liftosaur_source = LiftosaurSource(api_key=self.env.LIFTOSAUR_API_KEY)
@@ -38,3 +41,7 @@ class Default(WorkerEntrypoint):
 
         except Exception as e:
             return Response(f"Sync failed: {e!s}", status=500)
+
+    async def handle_get(self, request: requests.Request) -> Response:
+
+        return Response("Liftosaur -> Strava sync worker is alive!")
