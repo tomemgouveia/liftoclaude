@@ -7,6 +7,7 @@ the upper-snake-case fallback for anything not in the map.
 import re
 
 import pytest
+
 from liftostrava.strava.exercise_map import EXERCISE_TYPE_MAP, exercise_type_for
 
 

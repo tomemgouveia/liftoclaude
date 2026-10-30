@@ -12,7 +12,7 @@ Usage:
 Two input routes:
 
   - A JSON file (see liftostrava.sources.mcp_export and the sample at
-    liftostrava/tests/fixtures/sample_workout.json for its shape) — the
+    tests/fixtures/sample_workout.json for its shape) — the
     one CLAUDE.md in the repo root instructs Claude to write after
     pulling a record from the Liftosaur MCP server, for when no
     LIFTOSAUR_API_KEY is configured.

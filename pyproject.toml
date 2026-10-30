@@ -31,3 +31,6 @@ packages = ["src/liftostrava"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff.lint]
+ignore = ["BLE001"]

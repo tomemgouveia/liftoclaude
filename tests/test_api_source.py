@@ -10,6 +10,7 @@ shape documented at https://www.liftosaur.com/doc/api.
 
 import pytest
 import responses
+
 from liftostrava.models import Exercise, Set, Workout
 from liftostrava.sources.api import LiftosaurApiSource
 

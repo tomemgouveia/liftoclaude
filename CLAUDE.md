@@ -20,17 +20,17 @@ root). That determines which of the two flows below to use.
    ```
 
    (If the `liftostrava` package isn't installed into the active
-   environment yet, run `pip install -e "./liftostrava[dev]"` from the
+   environment yet, run `pip install -e ".[dev]"` from the
    repo root first — see `README.md`.)
 
    This fetches the record from Liftosaur's REST API and parses it
-   itself (see `liftostrava/src/liftostrava/sources/api.py` and
+   itself (see `src/liftostrava/sources/api.py` and
    `sources/liftohistory.py`) — completed vs. `warmup:`/`target:` sets,
    unit handling, etc. are all handled in code, not by you.
 
    By default this mutes the activity from Strava's home feed
    (`hide_from_home`), but see the privacy caveat in
-   `liftostrava/src/liftostrava/cli/sync.py`'s docstring and
+   `src/liftostrava/cli/sync.py`'s docstring and
    `README.md` — that is NOT the same as "Only You" visibility, which
    the Strava API cannot set. Pass `--public` only if the user
    explicitly asks not to mute it. If the user wants a true "Only You"
@@ -98,12 +98,12 @@ to Flow B for this request and mention the key needs fixing.
    ```
 
    (If the `liftostrava` package isn't installed into the active
-   environment yet, run `pip install -e "./liftostrava[dev]"` from the
+   environment yet, run `pip install -e ".[dev]"` from the
    repo root first — see `README.md`.)
 
    By default this mutes the activity from Strava's home feed
    (`hide_from_home`), but see the privacy caveat in
-   `liftostrava/src/liftostrava/cli/sync.py`'s docstring and
+   `src/liftostrava/cli/sync.py`'s docstring and
    `README.md` — that is NOT the same as "Only You" visibility, which
    the Strava API cannot set. Pass `--public` only if the user
    explicitly asks not to mute it. If the user wants a true "Only You"

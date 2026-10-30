@@ -1,4 +1,4 @@
-from workers import WorkerEntrypoint, Response
+from workers import Response, WorkerEntrypoint
 
 # from sources.liftosaur import LiftosaurSource
 # from strava.client import StravaClient
@@ -7,9 +7,13 @@ from workers import WorkerEntrypoint, Response
 
 class Default(WorkerEntrypoint):
     async def fetch(self, request):
-        if request.method != "POST":
-            return Response("Method Not Allowed", status=405)
+        match request.method:
+            case "POST":
+                return await self.handle_post(request)
+            case _:
+                return Response("Method Not Allowed", status=405)
 
+    async def handle_post(self, request):
         try:
             # # 1. Fetch latest workout session using LiftosaurSource
             # liftosaur_source = LiftosaurSource(api_key=self.env.LIFTOSAUR_API_KEY)
@@ -30,7 +34,7 @@ class Default(WorkerEntrypoint):
             # activity_result = strava_client.upload_activity(payload, access_token)
 
             # return Response(f"Successfully uploaded '{workout.title}' to Strava!")
-            return Response(f"Fake uploaded to Strava!")
+            return Response("Fake uploaded to Strava!")
 
         except Exception as e:
-            return Response(f"Sync failed: {str(e)}", status=500)
+            return Response(f"Sync failed: {e!s}", status=500)

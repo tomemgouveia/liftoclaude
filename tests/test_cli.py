@@ -15,6 +15,7 @@ import subprocess
 import sys
 
 import responses
+
 from liftostrava.cli import sync
 
 

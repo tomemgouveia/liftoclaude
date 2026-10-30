@@ -2,3 +2,10 @@ name = "liftosaur-strava-sync"
 main = "src/liftostrava/cloudflare_worker.py"
 compatibility_date = "2026-10-29"
 compatibility_flags = ["python_workers"]
+
+[observability.logs]
+enabled = false
+invocation_logs = true
+
+[observability.traces]
+enabled = false

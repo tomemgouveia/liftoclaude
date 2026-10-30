@@ -13,7 +13,7 @@ fi
 
 cd "$CLAUDE_PROJECT_DIR"
 
-# liftostrava requires Python >=3.11 (see liftostrava/pyproject.toml); the
+# liftostrava requires Python >=3.11 (see pyproject.toml); the
 # image's default `python3` satisfies that.
 if [ ! -x .venv/bin/python ]; then
   python3 -m venv .venv
@@ -21,7 +21,7 @@ fi
 
 # pip install -e is idempotent/fast on repeat runs (no-op if unchanged), so
 # it's safe to always run rather than trying to detect "already installed".
-.venv/bin/pip install -q -e "./liftostrava[dev]"
+.venv/bin/pip install -q -e ".[dev]"
 
 # Put the venv's scripts (sync-to-strava, strava-auth, pytest, ruff, ...) on
 # PATH for the rest of the session, so no `source .venv/bin/activate` needed.
