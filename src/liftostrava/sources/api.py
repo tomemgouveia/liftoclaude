@@ -86,7 +86,7 @@ class LiftosaurApiSource:
             data = resp.json()["data"]
             entries.extend(
                 WorkoutEntry(
-                    identifier=str(record["id"]),
+                    id=str(record["id"]),
                     workout=parse_liftohistory(record["text"]),
                 )
                 for record in data["records"]

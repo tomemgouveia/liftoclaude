@@ -82,7 +82,7 @@ def test_list_history_parses_every_record_on_a_single_page(monkeypatch):
     entries = LiftosaurApiSource.list_history()
 
     assert len(entries) == 1
-    assert entries[0].identifier == "2"
+    assert entries[0].id == "2"
     assert entries[0].workout.name == "L/S/U - Upper"
 
 
@@ -110,7 +110,7 @@ def test_list_history_follows_pagination_until_hasmore_is_false(monkeypatch):
 
     entries = LiftosaurApiSource.list_history()
 
-    assert [e.identifier for e in entries] == ["1", "2"]
+    assert [e.id for e in entries] == ["1", "2"]
     assert len(responses.calls) == 2
     assert "cursor=42" in (responses.calls[1].request.url or "")
     assert "cursor" not in (responses.calls[0].request.url or "")

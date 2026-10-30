@@ -17,9 +17,9 @@ class WorkoutSource(Protocol):
 
 @dataclass
 class WorkoutEntry:
-    """One entry from a WorkoutSource's list_history(): `identifier` is
+    """One entry from a WorkoutSource's list_history(): `id` is
     whatever a source's own constructor takes to load that same workout
-    again — SourceClass(identifier).load() — a stringified file path for
+    again — SourceClass(id).load() — a stringified file path for
     McpExportSource, a Liftosaur record id for LiftosaurApiSource. Both
     constructors already take a single string (or, for McpExportSource,
     a Path — which stringifies to the same thing), so one shared type
@@ -28,5 +28,5 @@ class WorkoutEntry:
     need to load() again at all.
     """
 
-    identifier: str
+    id: str
     workout: Workout
