@@ -20,7 +20,7 @@ root). That determines which of the two flows below to use.
    ```
 
    (If the project environment isn't set up yet, run `uv sync` from
-   the repo root — see `README.md`.)
+   the repo root — see `docs/setup.md`.)
 
    This fetches the record from Liftosaur's REST API and parses it
    itself (see `src/liftostrava/sources/api.py` and
@@ -30,7 +30,7 @@ root). That determines which of the two flows below to use.
    By default this mutes the activity from Strava's home feed
    (`hide_from_home`), but see the privacy caveat in
    `src/liftostrava/cli/sync.py`'s docstring and
-   `README.md` — that is NOT the same as "Only You" visibility, which
+   `docs/usage.md` — that is NOT the same as "Only You" visibility, which
    the Strava API cannot set. Pass `--public` only if the user
    explicitly asks not to mute it. If the user wants a true "Only You"
    default, tell them to set that in the Strava app itself (Settings >
@@ -97,12 +97,12 @@ to Flow B for this request and mention the key needs fixing.
    ```
 
    (If the project environment isn't set up yet, run `uv sync` from
-   the repo root — see `README.md`.)
+   the repo root — see `docs/setup.md`.)
 
    By default this mutes the activity from Strava's home feed
    (`hide_from_home`), but see the privacy caveat in
    `src/liftostrava/cli/sync.py`'s docstring and
-   `README.md` — that is NOT the same as "Only You" visibility, which
+   `docs/usage.md` — that is NOT the same as "Only You" visibility, which
    the Strava API cannot set. Pass `--public` only if the user
    explicitly asks not to mute it. If the user wants a true "Only You"
    default, tell them to set that in the Strava app itself (Settings >
