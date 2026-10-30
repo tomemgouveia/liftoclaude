@@ -100,13 +100,13 @@ def test_list_history_returns_empty_list_for_a_missing_directory(tmp_path):
     assert McpExportSource.list_history(directory=tmp_path / "does-not-exist") == []
 
 
-def test_list_history_entry_identifier_reloads_the_same_workout(tmp_path):
+def test_list_history_entry_id_reloads_the_same_workout(tmp_path):
     _write_workout(tmp_path, "only.json", "2026-09-11T17:30:05Z")
 
     [entry] = McpExportSource.list_history(directory=tmp_path)
 
-    assert entry.identifier == str(tmp_path / "only.json")
+    assert entry.id == str(tmp_path / "only.json")
     assert entry.workout.start_time == "2026-09-11T17:30:05Z"
-    # The whole point of `identifier`: it round-trips back into the same
+    # The whole point of `id`: it round-trips back into the same
     # source constructor to reload the same workout.
-    assert McpExportSource(entry.identifier).load() == entry.workout
+    assert McpExportSource(entry.id).load() == entry.workout

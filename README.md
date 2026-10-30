@@ -13,22 +13,22 @@ uploads it via Strava's undocumented JSON activity-upload format.
 **A note on that format:** Strava has not published a schema for the
 JSON upload payload or the `exercise_type` values it accepts for
 strength activities. Everything this tool does around that shape
-(see `liftostrava/src/liftostrava/strava/`) is reverse-engineered from
+(see `src/liftostrava/strava/`) is reverse-engineered from
 observed behavior, not official docs — it may drift as Strava changes
 things.
 
 ## Project layout
 
-This repo is a single installable package, `liftostrava`, living in
-its own `liftostrava/` subdirectory (room for a sibling package later,
-without reshuffling this one, if there's ever a reason to split
-something out — see `liftostrava/src/liftostrava/sources/` below).
+This repo is a single installable package, `liftostrava`, with its
+project configuration and source tree at the repository root.
 `.env` and `workouts/` stay at the repo root since they're runtime
 config/data, not code:
 
 ```
-liftostrava/
+.
 ├── pyproject.toml
+├── Dockerfile
+├── src/cloudflare_worker.py  # Cloudflare Worker entrypoint
 ├── src/liftostrava/
 │   ├── models.py        # Set, Exercise, Workout — the normalized shape
 │   ├── sources/         # how a workout gets into the system
@@ -47,6 +47,7 @@ liftostrava/
 │   └── cli/
 │       ├── sync.py          # `sync-to-strava` entrypoint
 │       └── auth.py          # `strava-auth` entrypoint
+├── wrangler.toml
 └── tests/
 ```
 
@@ -56,8 +57,8 @@ If you're running this project inside a sandboxed Claude Code
 environment (web, cloud, or a locked-down local sandbox), configure it
 to allow outbound access to **`*.strava.com`** (a plain `strava.com`
 entry is not enough — the allowlist matches hostnames exactly unless
-you use a leading `*.` wildcard, and none of what's needed here is the
-bare domain). That wildcard covers both hosts this project needs:
+you use a leading `*.` wildcard). That wildcard covers both Strava
+hosts this project needs:
 
 - **`www.strava.com`** — OAuth and every Strava API call (`strava-auth`,
   `sync-to-strava`); the sync flow can't work at all without this.
@@ -68,18 +69,19 @@ bare domain). That wildcard covers both hosts this project needs:
   can't check the live docs when extending the map for a new exercise
   and has to fall back to guessing.
 
+When using `--from-api`, also allow outbound access to
+**`www.liftosaur.com`** for Liftosaur's REST API. The MCP + JSON-file
+fallback does not use this API host.
+
 ## Setup (one-time)
 
-1. **Install the package** (into a virtualenv — this creates `.venv/`
-   if you don't already have one)
+1. **Install the package and dependencies** (this creates `.venv/` if
+   needed and installs the project plus its dev dependencies)
    ```
-   python -m venv .venv && source .venv/bin/activate
-   pip install -e "./liftostrava[dev]"
+   uv sync
    ```
-   This installs `liftostrava` in editable mode plus its dev
-   dependencies (pytest, responses, pre-commit, ruff), and puts the
-   `sync-to-strava` / `strava-auth` commands on your `PATH` within the
-   venv.
+   Run project commands with `uv run`, which uses the managed
+   environment without requiring manual activation.
 
 2. **Register a Strava API app**: go to
    [strava.com/settings/api](https://www.strava.com/settings/api),
@@ -97,7 +99,7 @@ bare domain). That wildcard covers both hosts this project needs:
 
 4. **Authorize once**
    ```
-   strava-auth
+   uv run strava-auth
    ```
    This opens a Strava consent flow in your browser and saves a
    refresh token into `.env`. You only need to do this once — the
@@ -108,14 +110,75 @@ bare domain). That wildcard covers both hosts this project needs:
 Dry run first — no network calls, no credentials needed, just prints
 what would be sent:
 ```
-sync-to-strava liftostrava/tests/fixtures/sample_workout.json --dry-run
+uv run sync-to-strava tests/fixtures/sample_workout.json --dry-run
 ```
 
 Once your `.env` is set up, do a real upload:
 ```
-sync-to-strava liftostrava/tests/fixtures/sample_workout.json
+uv run sync-to-strava tests/fixtures/sample_workout.json
 ```
 It'll print the resulting activity URL when done.
+
+## Run the Cloudflare Worker locally with Docker
+
+The Docker image runs Pywrangler's local Worker runtime; it does not
+deploy anything. Build and start it from the repository root:
+
+```
+docker build -t liftosaur-worker .
+docker run --rm -p 8787:8787 \
+  --mount "type=bind,source=$(pwd)/src,target=/app/src" \
+  --mount "type=bind,source=$(pwd)/src/liftostrava,target=/app/python_modules/liftostrava" \
+  liftosaur-worker
+```
+
+Then send a request to `http://localhost:8787/`, for example:
+
+```
+curl -i http://localhost:8787/
+```
+
+The source mount lets you edit the Worker without rebuilding the image.
+To exercise the GET handler, create a local `.dev.vars` file with
+`LIFTOSAUR_API_KEY=...` and mount it into the container:
+
+```
+docker run --rm -p 8787:8787 \
+  -e LIFTOSAUR_DOTENV_PATH=/app/.dev.vars \
+  --mount "type=bind,source=$(pwd)/src,target=/app/src" \
+  --mount "type=bind,source=$(pwd)/src/liftostrava,target=/app/python_modules/liftostrava" \
+  --mount "type=bind,source=$(pwd)/.dev.vars,target=/app/.dev.vars" \
+  liftosaur-worker
+```
+
+`.dev.vars` is gitignored and excluded from the Docker build context.
+The local Worker uses this writable mount as its dotenv file so that a
+rotated Strava refresh token is saved back to `.dev.vars`. Restart the
+container after a token rotation so Wrangler reloads the updated
+bindings. The GET handler makes a live request to Liftosaur's API.
+
+## Configure Strava token storage for Cloudflare
+
+The Worker stores Strava's current access/refresh token pair and expiry
+in a KV namespace. Create one, replace the placeholder `id` in
+`wrangler.toml` with the returned namespace ID, then set the initial
+credentials as Worker secrets:
+
+```
+npx wrangler kv namespace create STRAVA_TOKEN_STORE
+npx wrangler secret put STRAVA_CLIENT_ID
+npx wrangler secret put STRAVA_CLIENT_SECRET
+npx wrangler secret put STRAVA_REFRESH_TOKEN
+npx wrangler secret put LIFTOSAUR_API_KEY
+npx wrangler deploy
+```
+
+The refresh-token secret is only the bootstrap value used when KV has no
+token state yet. After the first successful refresh, the Worker reads and
+updates the latest token pair in KV. Local `wrangler dev` uses a local KV
+store by default; it does not share the production namespace's contents.
+Avoid concurrent sync requests: KV is eventually consistent, so
+simultaneous refreshes could race while Strava rotates the token.
 
 ## Normal usage (via Claude Code)
 
@@ -131,18 +194,20 @@ whether `LIFTOSAUR_API_KEY` is configured:
   Liftosaur MCP and hand-transcribes it into a JSON file matching the
   shape `sync-to-strava` expects, then runs that.
 
-  Each synced workout in this fallback flow is written to `workouts/`
-  as its own timestamped file (e.g.
+  Each workout in this fallback flow is written to `workouts/` as its
+  own timestamped file (e.g.
   `workouts/2026-08-24T165602Z-fierce-5-workout-a.json`) rather than
-  overwriting a single shared file, so past syncs stay around as a
-  record. You can also build/edit one by hand — see
-  `liftostrava/tests/fixtures/sample_workout.json` for the shape.
+  overwriting a shared file. This is temporary scratch space: delete
+  the file after a successful upload, but leave it in place if the
+  upload fails so it can be retried or inspected. You can also
+  build/edit a workout by hand — see
+  `tests/fixtures/sample_workout.json` for the shape.
 
 You can also invoke `--from-api` directly if you already know the
 record ID (e.g. from `get_history`'s output):
 ```
-sync-to-strava --from-api 1789147805585
-sync-to-strava --from-api 1789147805585 --dry-run
+uv run sync-to-strava --from-api 1789147805585
+uv run sync-to-strava --from-api 1789147805585 --dry-run
 ```
 
 ## Privacy — please read
@@ -177,7 +242,7 @@ upload (again: only relevant to feed visibility, not true privacy).
   but not a formal machine-readable schema, and Liftosaur exercise
   names don't map onto that list automatically. This project ships a
   small mapping (`EXERCISE_TYPE_MAP` in
-  `liftostrava/src/liftostrava/strava/exercise_map.py`), built from
+  `src/liftostrava/strava/exercise_map.py`), built from
   that page, for common lifts and falls back to an automatic
   guess otherwise. Unmatched exercises typically show up as "Unknown"
   in the Strava app rather than causing an error — reps/weight/volume

@@ -16,6 +16,7 @@ bugfixed deliberately and would be easy to lose in a refactor:
 
 import pytest
 import responses
+
 from liftostrava.models import Workout
 from liftostrava.strava import client
 

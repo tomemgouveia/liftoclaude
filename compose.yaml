@@ -1,0 +1,11 @@
+services:
+  worker:
+    build: .
+    ports:
+      - "8787:8787"
+    environment:
+      LIFTOSAUR_DOTENV_PATH: /app/.dev.vars
+    volumes:
+      - ./src:/app/src
+      - ./src/liftostrava:/app/python_modules/liftostrava
+      - ./.env:/app/.dev.vars

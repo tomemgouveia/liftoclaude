@@ -16,21 +16,20 @@ root). That determines which of the two flows below to use.
 2. Run the CLI directly against that ID:
 
    ```
-   sync-to-strava --from-api <id>
+   uv run sync-to-strava --from-api <id>
    ```
 
-   (If the `liftostrava` package isn't installed into the active
-   environment yet, run `pip install -e "./liftostrava[dev]"` from the
-   repo root first — see `README.md`.)
+   (If the project environment isn't set up yet, run `uv sync` from
+   the repo root — see `README.md`.)
 
    This fetches the record from Liftosaur's REST API and parses it
-   itself (see `liftostrava/src/liftostrava/sources/api.py` and
+   itself (see `src/liftostrava/sources/api.py` and
    `sources/liftohistory.py`) — completed vs. `warmup:`/`target:` sets,
    unit handling, etc. are all handled in code, not by you.
 
    By default this mutes the activity from Strava's home feed
    (`hide_from_home`), but see the privacy caveat in
-   `liftostrava/src/liftostrava/cli/sync.py`'s docstring and
+   `src/liftostrava/cli/sync.py`'s docstring and
    `README.md` — that is NOT the same as "Only You" visibility, which
    the Strava API cannot set. Pass `--public` only if the user
    explicitly asks not to mute it. If the user wants a true "Only You"
@@ -94,16 +93,15 @@ to Flow B for this request and mention the key needs fixing.
 3. Run the CLI against that file:
 
    ```
-   sync-to-strava workouts/<the file you just wrote>.json
+   uv run sync-to-strava workouts/<the file you just wrote>.json
    ```
 
-   (If the `liftostrava` package isn't installed into the active
-   environment yet, run `pip install -e "./liftostrava[dev]"` from the
-   repo root first — see `README.md`.)
+   (If the project environment isn't set up yet, run `uv sync` from
+   the repo root — see `README.md`.)
 
    By default this mutes the activity from Strava's home feed
    (`hide_from_home`), but see the privacy caveat in
-   `liftostrava/src/liftostrava/cli/sync.py`'s docstring and
+   `src/liftostrava/cli/sync.py`'s docstring and
    `README.md` — that is NOT the same as "Only You" visibility, which
    the Strava API cannot set. Pass `--public` only if the user
    explicitly asks not to mute it. If the user wants a true "Only You"

@@ -99,7 +99,7 @@ class McpExportSource:
                 continue
             if hi is not None and when > hi:
                 continue
-            entries.append(WorkoutEntry(identifier=str(path), workout=workout))
+            entries.append(WorkoutEntry(id=str(path), workout=workout))
 
         entries.sort(key=lambda e: e.workout.start_time, reverse=True)
         return entries

@@ -161,7 +161,7 @@ exactly one of the two, and pick the source accordingly. Everything downstream
 
 ## Verification
 
-- `python -m pytest` (from `liftostrava/`) — full suite green, including new
+- `python -m pytest` (from the repository root) — full suite green, including new
   parser/API-source tests.
 - `ruff check .` / `ruff format --check .`, `pyright` — clean, matching every
   prior phase in this project.

@@ -7,6 +7,7 @@ UTC+0.
 """
 
 import pytest
+
 from liftostrava.models import Exercise, Set, Workout
 from liftostrava.strava.payload import build_strava_payload, default_utc_offset
 

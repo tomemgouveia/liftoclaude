@@ -7,6 +7,7 @@ actually returned a different refresh_token than they were given."""
 
 import pytest
 import responses
+
 from liftostrava.strava import auth
 
 

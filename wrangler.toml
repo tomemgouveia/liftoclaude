@@ -1,0 +1,23 @@
+name = "liftosaur-strava-sync"
+main = "src/cloudflare_worker.py"
+compatibility_date = "2026-10-29"
+compatibility_flags = ["python_workers"]
+
+[[kv_namespaces]]
+binding = "STRAVA_TOKEN_STORE"
+# Replace this with the ID from `npx wrangler kv namespace create STRAVA_TOKEN_STORE`.
+id = "6fad49e40aaa4209acd8423973969a2b"
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+persist = true
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 1
+persist = true
+
+[observability.issues]
+enabled = true
