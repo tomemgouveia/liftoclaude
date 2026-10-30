@@ -31,7 +31,7 @@ class Default(WorkerEntrypoint):
 
             body = await request.json()
             workout_id = body.get("workout_id")
-
+            return Response(f"Workout ID: {workout_id}")
             workout_entry = liftosaur_source.get_workout(workout_id=workout_id)
 
             # 2. Reuse a still-valid token or refresh and persist the rotated pair.
