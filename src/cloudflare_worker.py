@@ -53,12 +53,11 @@ class Default(WorkerEntrypoint):
         )
         workout_history = [
             {
-                workout.id: {
-                    "name": workout.workout.name,
-                    "date": datetime.fromisoformat(workout.workout.start_time).strftime(
-                        "%Y-%m-%d"
-                    ),
-                }
+                "id": workout.id,
+                "name": workout.workout.name,
+                "date": datetime.fromisoformat(workout.workout.start_time).strftime(
+                    "%Y-%m-%d"
+                ),
             }
             for workout in sorted(
                 workout_history, key=lambda w: w.workout.start_time, reverse=True
