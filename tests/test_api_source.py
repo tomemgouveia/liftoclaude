@@ -138,3 +138,38 @@ def test_list_history_raises_a_clear_error_when_api_key_is_unset(monkeypatch):
 
     with pytest.raises(RuntimeError, match="LIFTOSAUR_API_KEY"):
         LiftosaurApiSource.list_history()
+
+
+@responses.activate
+def test_get_workout_matches_string_id_to_numeric_record_id(monkeypatch):
+    monkeypatch.setenv("LIFTOSAUR_API_KEY", "test-api-key")
+    responses.add(
+        responses.GET,
+        "https://www.liftosaur.com/api/v1/history/",
+        json={
+            "data": {
+                "records": [{"id": 1793000205964, "text": RECORD_TEXT}],
+                "hasMore": False,
+            }
+        },
+        status=200,
+    )
+
+    entry = LiftosaurApiSource("test-api-key").get_workout("1793000205964")
+
+    assert entry.id == "1793000205964"
+    assert entry.workout.name == "L/S/U - Upper"
+
+
+@responses.activate
+def test_get_workout_raises_clear_error_when_id_is_not_in_history(monkeypatch):
+    monkeypatch.setenv("LIFTOSAUR_API_KEY", "test-api-key")
+    responses.add(
+        responses.GET,
+        "https://www.liftosaur.com/api/v1/history/",
+        json={"data": {"records": [], "hasMore": False}},
+        status=200,
+    )
+
+    with pytest.raises(LookupError, match="Workout 'missing' was not found"):
+        LiftosaurApiSource("test-api-key").get_workout("missing")

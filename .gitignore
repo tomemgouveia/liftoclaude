@@ -9,3 +9,4 @@ workouts/*.json
 python_modules/
 pylock.toml
 *sandbox*.*
+.wrangler/

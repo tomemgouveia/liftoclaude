@@ -99,14 +99,19 @@ class LiftosaurApiSource:
             headers={"Authorization": f"Bearer {self.api_key}"},
             timeout=30,
         )
-        return WorkoutEntry(
-            id=workout_id,
-            workout=parse_liftohistory(
-                next(
-                    filter(
-                        lambda x: x["id"] == workout_id,
-                        response.json()["data"]["records"],
-                    )
-                )["text"]
+        response.raise_for_status()
+        record = next(
+            (
+                record
+                for record in response.json()["data"]["records"]
+                if str(record["id"]) == str(workout_id)
             ),
+            None,
+        )
+        if record is None:
+            raise LookupError(f"Workout {workout_id!r} was not found in history")
+
+        return WorkoutEntry(
+            id=str(record["id"]),
+            workout=parse_liftohistory(record["text"]),
         )

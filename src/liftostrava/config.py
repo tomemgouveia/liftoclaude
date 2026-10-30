@@ -8,10 +8,11 @@ up — that holds for an editable install from this checkout
 anywhere __file__ would point outside the checkout).
 """
 
+import os
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-ENV_PATH = REPO_ROOT / ".env"
+ENV_PATH = Path(os.environ.get("LIFTOSAUR_DOTENV_PATH", REPO_ROOT / ".env"))
 # CLAUDE.md's scratch space for hand-transcribed workout JSON files (see
 # sources/mcp_export.py's list_history) — gitignored, not an archive.
 WORKOUTS_DIR = REPO_ROOT / "workouts"

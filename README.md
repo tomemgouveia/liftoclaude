@@ -144,14 +144,41 @@ To exercise the GET handler, create a local `.dev.vars` file with
 
 ```
 docker run --rm -p 8787:8787 \
+  -e LIFTOSAUR_DOTENV_PATH=/app/.dev.vars \
   --mount "type=bind,source=$(pwd)/src,target=/app/src" \
   --mount "type=bind,source=$(pwd)/src/liftostrava,target=/app/python_modules/liftostrava" \
-  --mount "type=bind,source=$(pwd)/.dev.vars,target=/app/.dev.vars,readonly" \
+  --mount "type=bind,source=$(pwd)/.dev.vars,target=/app/.dev.vars" \
   liftosaur-worker
 ```
 
 `.dev.vars` is gitignored and excluded from the Docker build context.
-The GET handler makes a live request to Liftosaur's API.
+The local Worker uses this writable mount as its dotenv file so that a
+rotated Strava refresh token is saved back to `.dev.vars`. Restart the
+container after a token rotation so Wrangler reloads the updated
+bindings. The GET handler makes a live request to Liftosaur's API.
+
+## Configure Strava token storage for Cloudflare
+
+The Worker stores Strava's current access/refresh token pair and expiry
+in a KV namespace. Create one, replace the placeholder `id` in
+`wrangler.toml` with the returned namespace ID, then set the initial
+credentials as Worker secrets:
+
+```
+npx wrangler kv namespace create STRAVA_TOKEN_STORE
+npx wrangler secret put STRAVA_CLIENT_ID
+npx wrangler secret put STRAVA_CLIENT_SECRET
+npx wrangler secret put STRAVA_REFRESH_TOKEN
+npx wrangler secret put LIFTOSAUR_API_KEY
+npx wrangler deploy
+```
+
+The refresh-token secret is only the bootstrap value used when KV has no
+token state yet. After the first successful refresh, the Worker reads and
+updates the latest token pair in KV. Local `wrangler dev` uses a local KV
+store by default; it does not share the production namespace's contents.
+Avoid concurrent sync requests: KV is eventually consistent, so
+simultaneous refreshes could race while Strava rotates the token.
 
 ## Normal usage (via Claude Code)
 
