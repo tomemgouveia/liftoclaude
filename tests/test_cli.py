@@ -86,15 +86,21 @@ def test_dry_run_from_api_fetches_and_parses_via_the_rest_api(monkeypatch, capsy
     )
     responses.add(
         responses.GET,
-        "https://www.liftosaur.com/api/v1/history/12345",
+        "https://www.liftosaur.com/api/v1/history/",
         json={
             "data": {
-                "text": (
-                    '2026-09-11 17:30:05 +00:00 / program: "L/S/U" / '
-                    'dayName: "Upper" / duration: 2625s / exercises: {\n'
-                    "  Bench Press / 2x8 42.5kg\n"
-                    "}"
-                )
+                "records": [
+                    {
+                        "id": 12345,
+                        "text": (
+                            '2026-09-11 17:30:05 +00:00 / program: "L/S/U" / '
+                            'dayName: "Upper" / duration: 2625s / exercises: {\n'
+                            "  Bench Press / 2x8 42.5kg\n"
+                            "}"
+                        ),
+                    }
+                ],
+                "hasMore": False,
             }
         },
         status=200,

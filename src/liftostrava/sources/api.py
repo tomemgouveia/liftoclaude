@@ -109,7 +109,13 @@ class LiftosaurApiSource:
             None,
         )
         if record is None:
-            raise LookupError(f"Workout {workout_id!r} was not found in history")
+            entry = next(
+                (entry for entry in self.list_history() if entry.id == str(workout_id)),
+                None,
+            )
+            if entry is None:
+                raise LookupError(f"Workout {workout_id!r} was not found in history")
+            return entry
 
         return WorkoutEntry(
             id=str(record["id"]),

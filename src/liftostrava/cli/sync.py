@@ -103,7 +103,11 @@ def main():
     load_dotenv(ENV_PATH)
 
     if args.from_api:
-        workout = LiftosaurApiSource(args.from_api).load()
+        workout = (
+            LiftosaurApiSource(os.getenv("LIFTOSAUR_API_KEY", ""))
+            .get_workout(args.from_api)
+            .workout
+        )
     else:
         workout = McpExportSource(args.workout_file).load()
 

@@ -23,36 +23,38 @@ RECORD_TEXT = (
 
 
 @responses.activate
-def test_load_hits_the_expected_url_with_a_bearer_header(monkeypatch):
-    monkeypatch.setenv("LIFTOSAUR_API_KEY", "test-api-key")
+def test_get_workout_hits_the_history_url_with_a_bearer_header():
     responses.add(
         responses.GET,
-        "https://www.liftosaur.com/api/v1/history/12345",
-        json={"data": {"text": RECORD_TEXT}},
+        "https://www.liftosaur.com/api/v1/history/",
+        json={
+            "data": {"records": [{"id": 12345, "text": RECORD_TEXT}], "hasMore": False}
+        },
         status=200,
     )
 
-    LiftosaurApiSource("12345").load()
+    LiftosaurApiSource("test-api-key").get_workout("12345")
 
     assert len(responses.calls) == 1
     sent = responses.calls[0].request
-    assert sent.url == "https://www.liftosaur.com/api/v1/history/12345"
+    assert sent.url == "https://www.liftosaur.com/api/v1/history/"
     assert sent.headers["Authorization"] == "Bearer test-api-key"
 
 
 @responses.activate
-def test_load_parses_the_response_text_field_into_a_workout(monkeypatch):
-    monkeypatch.setenv("LIFTOSAUR_API_KEY", "test-api-key")
+def test_get_workout_parses_the_response_text_field():
     responses.add(
         responses.GET,
-        "https://www.liftosaur.com/api/v1/history/12345",
-        json={"data": {"text": RECORD_TEXT}},
+        "https://www.liftosaur.com/api/v1/history/",
+        json={
+            "data": {"records": [{"id": 12345, "text": RECORD_TEXT}], "hasMore": False}
+        },
         status=200,
     )
 
-    workout = LiftosaurApiSource("12345").load()
+    entry = LiftosaurApiSource("test-api-key").get_workout("12345")
 
-    assert workout == Workout(
+    assert entry.workout == Workout(
         start_time="2026-09-11T17:30:05Z",
         elapsed_time=2625,
         name="L/S/U - Upper",
@@ -62,16 +64,13 @@ def test_load_parses_the_response_text_field_into_a_workout(monkeypatch):
     )
 
 
-def test_load_raises_a_clear_error_when_api_key_is_unset(monkeypatch):
-    monkeypatch.delenv("LIFTOSAUR_API_KEY", raising=False)
-
+def test_api_source_raises_a_clear_error_when_api_key_is_unset():
     with pytest.raises(RuntimeError, match="LIFTOSAUR_API_KEY"):
-        LiftosaurApiSource("12345").load()
+        LiftosaurApiSource("")
 
 
 @responses.activate
-def test_list_history_parses_every_record_on_a_single_page(monkeypatch):
-    monkeypatch.setenv("LIFTOSAUR_API_KEY", "test-api-key")
+def test_list_history_parses_every_record_on_a_single_page():
     responses.add(
         responses.GET,
         "https://www.liftosaur.com/api/v1/history",
@@ -79,7 +78,7 @@ def test_list_history_parses_every_record_on_a_single_page(monkeypatch):
         status=200,
     )
 
-    entries = LiftosaurApiSource.list_history()
+    entries = LiftosaurApiSource("test-api-key").list_history()
 
     assert len(entries) == 1
     assert entries[0].id == "2"
@@ -87,8 +86,7 @@ def test_list_history_parses_every_record_on_a_single_page(monkeypatch):
 
 
 @responses.activate
-def test_list_history_follows_pagination_until_hasmore_is_false(monkeypatch):
-    monkeypatch.setenv("LIFTOSAUR_API_KEY", "test-api-key")
+def test_list_history_follows_pagination_until_hasmore_is_false():
     responses.add(
         responses.GET,
         "https://www.liftosaur.com/api/v1/history",
@@ -108,7 +106,7 @@ def test_list_history_follows_pagination_until_hasmore_is_false(monkeypatch):
         status=200,
     )
 
-    entries = LiftosaurApiSource.list_history()
+    entries = LiftosaurApiSource("test-api-key").list_history()
 
     assert [e.id for e in entries] == ["1", "2"]
     assert len(responses.calls) == 2
@@ -117,8 +115,7 @@ def test_list_history_follows_pagination_until_hasmore_is_false(monkeypatch):
 
 
 @responses.activate
-def test_list_history_passes_start_and_end_date_as_query_params(monkeypatch):
-    monkeypatch.setenv("LIFTOSAUR_API_KEY", "test-api-key")
+def test_list_history_passes_start_and_end_date_as_query_params():
     responses.add(
         responses.GET,
         "https://www.liftosaur.com/api/v1/history",
@@ -126,7 +123,9 @@ def test_list_history_passes_start_and_end_date_as_query_params(monkeypatch):
         status=200,
     )
 
-    LiftosaurApiSource.list_history(start_date="2026-09-01", end_date="2026-09-11")
+    LiftosaurApiSource("test-api-key").list_history(
+        start_date="2026-09-01", end_date="2026-09-11"
+    )
 
     sent_url = responses.calls[0].request.url or ""
     assert "startDate=2026-09-01" in sent_url
@@ -134,10 +133,8 @@ def test_list_history_passes_start_and_end_date_as_query_params(monkeypatch):
 
 
 def test_list_history_raises_a_clear_error_when_api_key_is_unset(monkeypatch):
-    monkeypatch.delenv("LIFTOSAUR_API_KEY", raising=False)
-
     with pytest.raises(RuntimeError, match="LIFTOSAUR_API_KEY"):
-        LiftosaurApiSource.list_history()
+        LiftosaurApiSource("").list_history()
 
 
 @responses.activate
@@ -162,11 +159,61 @@ def test_get_workout_matches_string_id_to_numeric_record_id(monkeypatch):
 
 
 @responses.activate
+def test_get_workout_searches_later_pages_when_id_is_not_on_first_page():
+    responses.add(
+        responses.GET,
+        "https://www.liftosaur.com/api/v1/history/",
+        json={
+            "data": {
+                "records": [{"id": 1, "text": RECORD_TEXT}],
+                "hasMore": True,
+                "nextCursor": 2,
+            }
+        },
+        status=200,
+    )
+    responses.add(
+        responses.GET,
+        "https://www.liftosaur.com/api/v1/history",
+        json={
+            "data": {
+                "records": [{"id": 1, "text": RECORD_TEXT}],
+                "hasMore": True,
+                "nextCursor": 2,
+            }
+        },
+        status=200,
+    )
+    responses.add(
+        responses.GET,
+        "https://www.liftosaur.com/api/v1/history",
+        json={
+            "data": {
+                "records": [{"id": 1793000205964, "text": RECORD_TEXT}],
+                "hasMore": False,
+            }
+        },
+        status=200,
+    )
+
+    entry = LiftosaurApiSource("test-api-key").get_workout("1793000205964")
+
+    assert entry.id == "1793000205964"
+    assert len(responses.calls) == 3
+
+
+@responses.activate
 def test_get_workout_raises_clear_error_when_id_is_not_in_history(monkeypatch):
     monkeypatch.setenv("LIFTOSAUR_API_KEY", "test-api-key")
     responses.add(
         responses.GET,
         "https://www.liftosaur.com/api/v1/history/",
+        json={"data": {"records": [], "hasMore": False}},
+        status=200,
+    )
+    responses.add(
+        responses.GET,
+        "https://www.liftosaur.com/api/v1/history",
         json={"data": {"records": [], "hasMore": False}},
         status=200,
     )
