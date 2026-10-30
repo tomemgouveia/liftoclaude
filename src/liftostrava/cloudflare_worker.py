@@ -1,7 +1,10 @@
+from datetime import datetime, timedelta
+
 import requests
 from workers import Response, WorkerEntrypoint
 
-# from sources.liftosaur import LiftosaurSource
+from liftostrava.sources.api import LiftosaurApiSource
+
 # from strava.client import StravaClient
 # from strava.payload import build_strava_payload
 
@@ -43,5 +46,14 @@ class Default(WorkerEntrypoint):
             return Response(f"Sync failed: {e!s}", status=500)
 
     async def handle_get(self, request: requests.Request) -> Response:
-
-        return Response("Liftosaur -> Strava sync worker is alive!")
+        api_source = LiftosaurApiSource(api_key=self.env.LIFTOSAUR_API_KEY)
+        workout_history = api_source.list_history(
+            start_date=datetime.today() - timedelta(days=5)
+        )
+        workout_history = [
+            {workout.id: workout.workout.name}
+            for workout in sorted(
+                workout_history, key=lambda w: w.workout.start_time, reverse=True
+            )
+        ]
+        return Response(str(workout_history), status=200)

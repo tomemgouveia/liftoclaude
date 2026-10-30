@@ -14,65 +14,61 @@ via `cursor`/`hasMore`/`nextCursor` and optionally restricted to a
 confirmed against https://www.liftosaur.com/doc/api on 2026-09-13.
 """
 
-import os
 from datetime import datetime
 
 import requests
 
-from liftostrava.models import Workout
 from liftostrava.sources.base import WorkoutEntry
 from liftostrava.sources.liftohistory import parse_liftohistory
 
 API_BASE = "https://www.liftosaur.com/api/v1"
 
 
-def _require_api_key() -> str:
-    api_key = os.getenv("LIFTOSAUR_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "LIFTOSAUR_API_KEY is not set. Generate one at "
-            "Settings -> API Keys in the Liftosaur app (requires "
-            "Premium), then add it to .env — see .env.example."
-        )
-    return api_key
-
-
 class LiftosaurApiSource:
-    def __init__(self, record_id: str):
-        self.record_id = record_id
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+        if not self.api_key:
+            raise RuntimeError(
+                "LIFTOSAUR_API_KEY is not set. Generate one at "
+                "Settings -> API Keys in the Liftosaur app (requires "
+                "Premium), then add it to .env — see .env.example."
+            )
 
-    def load(self) -> Workout:
-        api_key = _require_api_key()
-        resp = requests.get(
-            f"{API_BASE}/history/{self.record_id}",
-            headers={"Authorization": f"Bearer {api_key}"},
-        )
-        resp.raise_for_status()
-        text = resp.json()["data"]["text"]
-        return parse_liftohistory(text)
+    def health_check(self) -> bool:
+        """Check if the API key is valid by making a simple request."""
+        try:
+            response = requests.get(
+                f"{API_BASE}/history",
+                headers={"Authorization": f"Bearer {self.api_key}"},
+            )
+            response.raise_for_status()
+            return True
+        except requests.RequestException:
+            return False
 
-    @staticmethod
     def list_history(
-        start_date: datetime | str | None = None, end_date: datetime | str | None = None
+        self,
+        start_date: datetime | str | None = None,
+        end_date: datetime | str | None = None,
     ) -> list[WorkoutEntry]:
         """List every workout in Liftosaur's history, newest first,
         optionally restricted to a `[start_date, end_date]` range (either
         end may be omitted) — following the API's `cursor`/`hasMore`
-        pagination (up to 200 records/page) internally so the caller
-        always gets the complete, already-parsed range in one call.
-
-        `start_date`/`end_date` are passed straight through to the API
-        as its `startDate`/`endDate` query params — an ISO date/datetime
-        string or a unix timestamp, per its own docs; unlike
-        McpExportSource.list_history, no local date parsing happens here.
+        pagination. Returns a list of WorkoutEntry objects.
         """
-        api_key = _require_api_key()
-        headers = {"Authorization": f"Bearer {api_key}"}
+
+        def _parse_date(date: datetime | str) -> str:
+            if isinstance(date, datetime):
+                return date.isoformat()
+            return date
+
         params = {}
         if start_date:
-            params["startDate"] = start_date
+            params["startDate"] = _parse_date(start_date)
         if end_date:
-            params["endDate"] = end_date
+            params["endDate"] = _parse_date(end_date)
+
+        headers = {"Authorization": f"Bearer {self.api_key}"}
 
         entries = []
         cursor: str | None = None
