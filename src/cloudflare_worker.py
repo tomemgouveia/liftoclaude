@@ -31,14 +31,17 @@ class Default(WorkerEntrypoint):
     async def get_authenticated_email(self) -> str | None:
         access = self.ctx.access
         if not access:
+            print("Cloudflare Access is not available in this environment")
             return None
 
         identity = await access.getIdentity()
         if not identity:
+            print("Cloudflare Access identity is not available in this environment")
             return None
 
         email = identity.email
         if not email:
+            print("Cloudflare Access identity does not contain an email")
             return None
         return str(email).strip().lower()
 
