@@ -1,7 +1,8 @@
-import json
 import logging
 import time
-from datetime import datetime, timedelta
+
+# from datetime import datetime, timedelta
+from typing import Any
 
 import requests
 from workers import Request, Response, WorkerEntrypoint
@@ -10,24 +11,70 @@ from liftostrava.sources.api import LiftosaurApiSource
 from liftostrava.strava.client import poll_upload, set_muted, upload_activity
 
 logger = logging.getLogger(__name__)
-STRAVA_TOKEN_KEY = "strava-token-state"
 STRAVA_REFRESH_THRESHOLD_SECONDS = 3600
 
 
 class Default(WorkerEntrypoint):
     async def fetch(self, request: Request) -> Response:
+        email = await self.get_authenticated_email()
+        if email is None:
+            return Response("Cloudflare Access authentication required", status=401)
+
         match request.method:
             case "POST":
-                return await self.handle_post(request)
+                return await self.handle_post(request, email)
             case "GET":
-                return await self.handle_get(request)
+                return await self.handle_get_2(email)
             case _:
                 return Response("Method Not Allowed", status=405)
 
-    async def handle_post(self, request: Request) -> Response:
+    async def get_authenticated_email(self) -> str | None:
+        access = self.ctx.access
+        if not access:
+            return None
+
+        identity = await access.getIdentity()
+        if not identity:
+            return None
+
+        email = identity.email
+        if not email:
+            return None
+        return str(email).strip().lower()
+
+    async def get_user_credentials(self, email: str) -> dict[str, Any] | None:
+        query = (
+            await self.env.liftostrava_users_db.prepare("""
+            SELECT
+                u.id AS user_id,
+                u.email,
+                u.name,
+                c.liftosaur_api_key,
+                c.strava_refresh_token,
+                c.strava_access_token,
+                c.strava_expires_at
+            FROM users AS u
+            JOIN credentials AS c ON c.user_id = u.id
+            WHERE lower(u.email) = ?
+            """)
+            .bind(email)
+            .run()
+        )
+
+        if not query.results:
+            return None
+        return query.results[0]
+
+    async def handle_post(self, request: Request, email: str) -> Response:
         try:
+            credentials = await self.get_user_credentials(email)
+            if credentials is None:
+                return Response("User or credentials not found", status=404)
+
             # 1. Fetch latest workout session using LiftosaurSource
-            liftosaur_source = LiftosaurApiSource(api_key=self.env.LIFTOSAUR_API_KEY)
+            liftosaur_source = LiftosaurApiSource(
+                api_key=credentials["liftosaur_api_key"]
+            )
 
             body = await request.json()
             workout_id = body.get("workout_id")
@@ -35,7 +82,7 @@ class Default(WorkerEntrypoint):
             workout_entry = liftosaur_source.get_workout(workout_id=workout_id)
 
             # 2. Reuse a still-valid token or refresh and persist the rotated pair.
-            access_token = await self.get_strava_access_token()
+            access_token = await self.get_strava_access_token(credentials)
 
             # 4. Upload to Strava API
             upload = upload_activity(
@@ -69,18 +116,18 @@ class Default(WorkerEntrypoint):
                 status=500,
             )
 
-    async def get_strava_access_token(self) -> str:
-        token_json = await self.env.STRAVA_TOKEN_STORE.get(STRAVA_TOKEN_KEY)
-        if token_json is None:
-            refresh_token = self.env.STRAVA_REFRESH_TOKEN
-        else:
-            token_state = json.loads(token_json)
-            refresh_token = token_state["refresh_token"]
-            if (
-                token_state["expires_at"]
-                > time.time() + STRAVA_REFRESH_THRESHOLD_SECONDS
-            ):
-                return token_state["access_token"]
+    async def get_strava_access_token(self, credentials: dict[str, Any]) -> str:
+        access_token = credentials["strava_access_token"]
+        refresh_token = credentials["strava_refresh_token"]
+        expires_at = credentials["strava_expires_at"]
+        if not refresh_token:
+            raise RuntimeError("Strava is not connected for this user")
+        if (
+            access_token
+            and expires_at
+            and expires_at > time.time() + STRAVA_REFRESH_THRESHOLD_SECONDS
+        ):
+            return access_token
 
         # Match the synchronous requests client used by the other API calls.
         response = requests.post(  # noqa: ASYNC210
@@ -95,29 +142,77 @@ class Default(WorkerEntrypoint):
         )
         response.raise_for_status()
         refreshed = response.json()
-        token_state = {
-            "access_token": refreshed["access_token"],
-            "refresh_token": refreshed["refresh_token"],
-            "expires_at": refreshed["expires_at"],
-        }
-        await self.env.STRAVA_TOKEN_STORE.put(STRAVA_TOKEN_KEY, json.dumps(token_state))
-        return token_state["access_token"]
-
-    async def handle_get(self, request: Request) -> Response:
-        api_source = LiftosaurApiSource(api_key=self.env.LIFTOSAUR_API_KEY)
-        workout_history = api_source.list_history(
-            start_date=datetime.today() - timedelta(days=5)
-        )
-        workout_history = [
-            {
-                "id": workout.id,
-                "name": workout.workout.name,
-                "date": datetime.fromisoformat(workout.workout.start_time).strftime(
-                    "%Y-%m-%d"
-                ),
-            }
-            for workout in sorted(
-                workout_history, key=lambda w: w.workout.start_time, reverse=True
+        await (
+            self.env.liftostrava_users_db.prepare("""
+                UPDATE credentials
+                SET strava_access_token = ?,
+                    strava_refresh_token = ?,
+                    strava_expires_at = ?,
+                    updated_at = unixepoch()
+                WHERE user_id = ?
+                """)
+            .bind(
+                refreshed["access_token"],
+                refreshed["refresh_token"],
+                refreshed["expires_at"],
+                credentials["user_id"],
             )
-        ]
-        return Response(json.dumps(workout_history), status=200)
+            .run()
+        )
+        return refreshed["access_token"]
+
+    # async def handle_get(self, _request: Request, email: str) -> Response:
+    #     credentials = await self.get_user_credentials(email)
+    #     if credentials is None:
+    #         return Response("User or credentials not found", status=404)
+
+    #     api_source = LiftosaurApiSource(api_key=credentials["liftosaur_api_key"])
+    #     workout_history = api_source.list_history(
+    #         start_date=datetime.today() - timedelta(days=5)
+    #     )
+    #     workout_history = [
+    #         {
+    #             "id": workout.id,
+    #             "name": workout.workout.name,
+    #             "date": datetime.fromisoformat(workout.workout.start_time).strftime(
+    #                 "%Y-%m-%d"
+    #             ),
+    #         }
+    #         for workout in sorted(
+    #             workout_history, key=lambda w: w.workout.start_time, reverse=True
+    #         )
+    #     ]
+    #     return Response.from_json(workout_history)
+
+    async def handle_get_2(self, email: str) -> Response:
+        query = (
+            await self.env.liftostrava_users_db.prepare("""
+            SELECT
+                u.id AS user_id,
+                u.email,
+                u.name,
+                c.liftosaur_api_key IS NOT NULL AS has_liftosaur_key,
+                c.strava_refresh_token IS NOT NULL AS has_strava_refresh_token,
+                c.strava_access_token IS NOT NULL AS has_strava_access_token
+            FROM users AS u
+            LEFT JOIN credentials AS c ON c.user_id = u.id
+            WHERE lower(u.email) = ?
+            """)
+            .bind(email)
+            .run()
+        )
+
+        if not query.results:
+            return Response.from_json({"error": "User not found"}, status=404)
+
+        user = query.results[0]
+        return Response.from_json(
+            {
+                "user_id": user["user_id"],
+                "email": user["email"],
+                "name": user["name"],
+                "has_liftosaur_key": bool(user["has_liftosaur_key"]),
+                "has_strava_refresh_token": bool(user["has_strava_refresh_token"]),
+                "has_strava_access_token": bool(user["has_strava_access_token"]),
+            }
+        )

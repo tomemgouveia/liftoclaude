@@ -20,3 +20,8 @@ persist = true
 
 [observability.issues]
 enabled = true
+
+[[d1_databases]]
+binding = "liftostrava_users_db"
+database_name = "liftosaur-strava-sync-users"
+database_id = "acce9e70-4874-41bb-bf9c-548c3876ef0c"
