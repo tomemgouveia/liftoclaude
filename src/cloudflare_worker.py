@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 
@@ -5,7 +6,7 @@ import time
 from typing import Any
 
 import requests
-from workers import Request, Response, WorkerEntrypoint
+from workers import Request, Response, WorkerEntrypoint, fetch
 
 from liftostrava.sources.api import LiftosaurApiSource
 from liftostrava.strava.client import poll_upload, set_muted, upload_activity
@@ -16,7 +17,7 @@ STRAVA_REFRESH_THRESHOLD_SECONDS = 3600
 
 class Default(WorkerEntrypoint):
     async def fetch(self, request: Request) -> Response:
-        email = await self.get_authenticated_email()
+        email = await self.get_authenticated_email(request)
         if email is None:
             return Response("Cloudflare Access authentication required", status=401)
 
@@ -28,22 +29,39 @@ class Default(WorkerEntrypoint):
             case _:
                 return Response("Method Not Allowed", status=405)
 
-    async def get_authenticated_email(self) -> str | None:
-        access = self.ctx.access
-        if not access:
-            print("Cloudflare Access is not available in this environment")
+    async def get_authenticated_email(self, request: Request) -> str | None:
+        cookie_header = request.headers.get("cookie", "")
+        access_cookie = None
+        for cookie in cookie_header.split(";"):
+            name, separator, value = cookie.strip().partition("=")
+            if name == "CF_Authorization" and separator and value.strip():
+                access_cookie = value.strip()
+                break
+
+        if access_cookie is None:
+            logger.warning("No CF_Authorization cookie found in request headers")
             return None
 
-        identity = await access.getIdentity()
-        if not identity:
-            print("Cloudflare Access identity is not available in this environment")
+        try:
+            response = await fetch(
+                f"{self.env.CF_ACCESS_TEAM_DOMAIN.rstrip('/')}/cdn-cgi/access/get-identity",
+                headers={"Cookie": f"CF_Authorization={access_cookie}"},
+            )
+            response.raise_for_status()
+            identity = json.loads(await response.text())
+        except (OSError, ValueError, requests.RequestException):
+            logger.warning("Cloudflare Access identity lookup failed")
             return None
 
-        email = identity.email
-        if not email:
-            print("Cloudflare Access identity does not contain an email")
+        if not isinstance(identity, dict):
+            logger.warning("Cloudflare Access returned an invalid identity response")
             return None
-        return str(email).strip().lower()
+
+        email = identity.get("email")
+        if not isinstance(email, str) or not email.strip():
+            logger.warning("Cloudflare Access identity did not contain an email")
+            return None
+        return email.strip().lower()
 
     async def get_user_credentials(self, email: str) -> dict[str, Any] | None:
         query = (
