@@ -44,7 +44,7 @@ class Default(WorkerEntrypoint):
 
         try:
             response = await fetch(
-                f"{self.env.CF_ACCESS_TEAM_DOMAIN.rstrip('/')}/cdn-cgi/access/get-identity",
+                f"https://{self.env.CF_ACCESS_TEAM_DOMAIN.rstrip('/')}/cdn-cgi/access/get-identity",
                 headers={"Cookie": f"CF_Authorization={access_cookie}"},
             )
             response.raise_for_status()
