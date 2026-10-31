@@ -1,4 +1,3 @@
-import json
 import logging
 import time
 
@@ -6,8 +5,9 @@ import time
 from typing import Any
 
 import requests
-from workers import Request, Response, WorkerEntrypoint, fetch
+from workers import Request, Response, WorkerEntrypoint
 
+from cloudflare.process_jwt import AccessPrincipal, process_jwt
 from liftostrava.sources.api import LiftosaurApiSource
 from liftostrava.strava.client import poll_upload, set_muted, upload_activity
 
@@ -17,79 +17,90 @@ STRAVA_REFRESH_THRESHOLD_SECONDS = 3600
 
 class Default(WorkerEntrypoint):
     async def fetch(self, request: Request) -> Response:
-        email = await self.get_authenticated_email(request)
-        if email is None:
+        principal = await self.get_authenticated_principal(request)
+        if principal is None:
             return Response("Cloudflare Access authentication required", status=401)
 
         match request.method:
             case "POST":
-                return await self.handle_post(request, email)
+                return await self.handle_post(request, principal)
             case "GET":
-                return await self.handle_get_2(email)
+                return await self.handle_get_2(principal)
             case _:
                 return Response("Method Not Allowed", status=405)
 
-    async def get_authenticated_email(self, request: Request) -> str | None:
-        cookie_header = request.headers.get("cookie", "")
-        access_cookie = None
-        for cookie in cookie_header.split(";"):
-            name, separator, value = cookie.strip().partition("=")
-            if name == "CF_Authorization" and separator and value.strip():
-                access_cookie = value.strip()
-                break
+    async def get_authenticated_principal(
+        self, request: Request
+    ) -> AccessPrincipal | None:
+        assertion = request.headers.get("cf-access-jwt-assertion")
+        if assertion:
+            team_domain = self.env.CF_ACCESS_TEAM_DOMAIN
+            expected_audience = self.env.CF_ACCESS_AUD
+            if not isinstance(team_domain, str) or not isinstance(
+                expected_audience, str
+            ):
+                logger.error(
+                    "Cloudflare Access team domain or audience is not configured"
+                )
+                return None
+            return await process_jwt(assertion, team_domain, expected_audience)
 
-        if access_cookie is None:
-            logger.warning("No CF_Authorization cookie found in request headers")
+        access = self.ctx.access
+        if access is None:
+            logger.warning("Cloudflare Access identity and JWT assertion are missing")
             return None
-
-        try:
-            response = await fetch(
-                f"https://{self.env.CF_ACCESS_TEAM_DOMAIN.rstrip('/')}/cdn-cgi/access/get-identity",
-                headers={"Cookie": f"CF_Authorization={access_cookie}"},
-            )
-            response.raise_for_status()
-            identity = json.loads(await response.text())
-        except (OSError, ValueError, requests.RequestException):
-            logger.warning("Cloudflare Access identity lookup failed")
-            return None
-
-        if not isinstance(identity, dict):
-            logger.warning("Cloudflare Access returned an invalid identity response")
-            return None
-
-        email = identity.get("email")
+        identity = await access.getIdentity()
+        email = identity.email if identity is not None else None
         if not isinstance(email, str) or not email.strip():
             logger.warning("Cloudflare Access identity did not contain an email")
             return None
-        return email.strip().lower()
+        return AccessPrincipal(email=email.strip().lower())
 
-    async def get_user_credentials(self, email: str) -> dict[str, Any] | None:
-        query = (
-            await self.env.liftostrava_users_db.prepare("""
+    async def get_user(self, principal: AccessPrincipal) -> dict[str, Any] | None:
+        sql = """
             SELECT
                 u.id AS user_id,
                 u.email,
                 u.name,
+                c.user_id IS NOT NULL AS has_credentials,
                 c.liftosaur_api_key,
                 c.strava_refresh_token,
                 c.strava_access_token,
                 c.strava_expires_at
             FROM users AS u
-            JOIN credentials AS c ON c.user_id = u.id
-            WHERE lower(u.email) = ?
-            """)
-            .bind(email)
-            .run()
-        )
+            LEFT JOIN credentials AS c ON c.user_id = u.id
+            WHERE {}
+            """
+        if principal.service_token_id is not None:
+            query = (
+                await self.env.liftostrava_users_db.prepare(
+                    sql.format("u.access_service_token_id = ?")
+                )
+                .bind(principal.service_token_id)
+                .run()
+            )
+        elif principal.email is not None:
+            query = (
+                await self.env.liftostrava_users_db.prepare(
+                    sql.format("lower(u.email) = ?")
+                )
+                .bind(principal.email)
+                .run()
+            )
+        else:
+            logger.error("Authenticated Access principal has no identity")
+            return None
 
         if not query.results:
             return None
         return query.results[0]
 
-    async def handle_post(self, request: Request, email: str) -> Response:
+    async def handle_post(
+        self, request: Request, principal: AccessPrincipal
+    ) -> Response:
         try:
-            credentials = await self.get_user_credentials(email)
-            if credentials is None:
+            credentials = await self.get_user(principal)
+            if credentials is None or not credentials["has_credentials"]:
                 return Response("User or credentials not found", status=404)
 
             # 1. Fetch latest workout session using LiftosaurSource
@@ -205,35 +216,18 @@ class Default(WorkerEntrypoint):
     #     ]
     #     return Response.from_json(workout_history)
 
-    async def handle_get_2(self, email: str) -> Response:
-        query = (
-            await self.env.liftostrava_users_db.prepare("""
-            SELECT
-                u.id AS user_id,
-                u.email,
-                u.name,
-                c.liftosaur_api_key IS NOT NULL AS has_liftosaur_key,
-                c.strava_refresh_token IS NOT NULL AS has_strava_refresh_token,
-                c.strava_access_token IS NOT NULL AS has_strava_access_token
-            FROM users AS u
-            LEFT JOIN credentials AS c ON c.user_id = u.id
-            WHERE lower(u.email) = ?
-            """)
-            .bind(email)
-            .run()
-        )
-
-        if not query.results:
+    async def handle_get_2(self, principal: AccessPrincipal) -> Response:
+        user = await self.get_user(principal)
+        if user is None:
             return Response.from_json({"error": "User not found"}, status=404)
 
-        user = query.results[0]
         return Response.from_json(
             {
                 "user_id": user["user_id"],
                 "email": user["email"],
                 "name": user["name"],
-                "has_liftosaur_key": bool(user["has_liftosaur_key"]),
-                "has_strava_refresh_token": bool(user["has_strava_refresh_token"]),
-                "has_strava_access_token": bool(user["has_strava_access_token"]),
+                "has_liftosaur_key": bool(user["liftosaur_api_key"]),
+                "has_strava_refresh_token": bool(user["strava_refresh_token"]),
+                "has_strava_access_token": bool(user["strava_access_token"]),
             }
         )

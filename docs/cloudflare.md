@@ -41,6 +41,36 @@ saved back to that file. Restart the container after a token rotation so
 Wrangler reloads the bindings. The GET handler makes a live request to the
 Liftosaur API.
 
+## Access authentication for users and Shortcuts
+
+The Worker verifies the `Cf-Access-Jwt-Assertion` header. For a human Access
+login it looks up the user by the verified email claim. For a service-token
+request it looks up the user by the verified `common_name` claim, which is the
+service token's Client ID.
+
+Create a separate Access service token for each user's Shortcut. Store only
+its Client ID in D1; keep the Client Secret in that user's Shortcut. Add the
+lookup column and unique index to the existing `users` table once:
+
+```sql
+ALTER TABLE users ADD COLUMN access_service_token_id TEXT;
+
+CREATE UNIQUE INDEX users_access_service_token_id_unique
+ON users(access_service_token_id);
+```
+
+Then associate each Client ID with its user:
+
+```sql
+UPDATE users
+SET access_service_token_id = '<CLIENT_ID>'
+WHERE email = '<USER_EMAIL>';
+```
+
+Use the Client ID value ending in `.access`, not the Client Secret. A service
+token identifies the Shortcut, not a human, so sharing one token between users
+would make their requests indistinguishable.
+
 ## Deploy
 
 The Worker stores the current Strava access token, refresh token, and expiry in
