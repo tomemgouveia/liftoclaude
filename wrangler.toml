@@ -15,10 +15,6 @@ run_worker_first = true
 # /connect has no file of its own; serve index.html and let the app pick the page.
 not_found_handling = "single-page-application"
 
-[[kv_namespaces]]
-binding = "STRAVA_TOKEN_STORE"
-id = "6fad49e40aaa4209acd8423973969a2b"
-
 [observability.logs]
 enabled = true
 head_sampling_rate = 1
@@ -47,10 +43,6 @@ aud = "local-dev-aud"
 
 [access.dev.identity]
 email = "test@example.com"
-
-[[previews.kv_namespaces]]
-binding = "STRAVA_TOKEN_STORE"
-id = "6fad49e40aaa4209acd8423973969a2b"
 
 [[previews.d1_databases]]
 binding = "liftosaur_strava_sync_users"
