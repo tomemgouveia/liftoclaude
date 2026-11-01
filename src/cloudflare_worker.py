@@ -2,7 +2,7 @@ import asyncio
 import logging
 import time
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 from typing import Any, cast
 from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -11,7 +11,6 @@ import requests
 from workers import Request, Response, WorkerEntrypoint
 
 from cloudflare import AccessIDKey, User, process_jwt
-from cloudflare.connect_page import render_connect_page
 from cloudflare.credential_crypto import (
     AES_LABEL,
     STATE_LABEL,
@@ -19,6 +18,7 @@ from cloudflare.credential_crypto import (
     derive_key,
     encrypt,
 )
+from cloudflare.history_range import HistoryRangeError, parse_history_range
 from cloudflare.oauth_state import sign_state, verify_state
 from liftostrava.sources.api import LiftosaurApiSource
 from liftostrava.strava.auth import (
@@ -73,14 +73,27 @@ class Default(WorkerEntrypoint):
             return Response("Cloudflare Access authentication required", status=401)
 
         path = urlparse(request.url).path.rstrip("/") or "/"
-        if path.startswith("/connect"):
+        if path.startswith("/connect") or path == "/api/settings":
             return await self.handle_connect(request, id_key, path)
 
-        match request.method:
-            case "POST":
+        match (request.method, path):
+            case ("POST", "/" | "/api/sync"):
+                # Browsers always send Origin on POSTs; reject cross-site
+                # ones. Service-token clients send none.
+                origin = request.headers.get("origin")
+                if origin is not None and origin != _origin(request.url):
+                    return Response("Forbidden", status=403)
                 return await self.handle_post(request, id_key)
-            case "GET":
-                return await self.handle_get(id_key)
+            case ("GET", "/api/workouts"):
+                return await self.handle_get(id_key, request)
+            case ("GET", "/"):
+                # Browsers get the app; API clients keep the JSON list.
+                if "text/html" not in (request.headers.get("accept") or ""):
+                    return await self.handle_get(id_key, request)
+                return await self.env.ASSETS.fetch(request)
+            case ("GET" | "HEAD", _):
+                # Built frontend files (JS, CSS, icons).
+                return await self.env.ASSETS.fetch(request)
             case _:
                 return Response("Method Not Allowed", status=405)
 
@@ -187,32 +200,34 @@ class Default(WorkerEntrypoint):
         self, request: Request, id_key: AccessIDKey, path: str
     ) -> Response:
         """Self-service onboarding: a signed-in (email) user saves their
-        Liftosaur key and timezone and connects Strava via OAuth."""
+        Liftosaur key and timezone and connects Strava via OAuth. The UI is
+        the React app; this serves it plus the settings API and the OAuth
+        redirects."""
         if id_key.email is None:
             return Response("Sign in with your email to use this page", status=403)
         base = _origin(request.url)
         try:
-            user = await self.get_or_create_user(id_key.email)
             match (request.method, path):
                 case ("GET", "/connect"):
-                    status = parse_qs(urlparse(request.url).query).get("status", [""])[
-                        0
-                    ]
-                    html = render_connect_page(
-                        email=user.email,
-                        liftosaur_set=bool(user.liftosaur_api_key),
-                        strava_connected=bool(user.strava_refresh_token),
-                        timezone=user.timezone,
-                        status=status,
+                    return await self.env.ASSETS.fetch(request)
+                case ("GET", "/api/settings"):
+                    user = await self.get_or_create_user(id_key.email)
+                    return Response.from_json(
+                        {
+                            "email": user.email,
+                            "liftosaur_set": bool(user.liftosaur_api_key),
+                            "strava_connected": bool(user.strava_refresh_token),
+                            "timezone": user.timezone,
+                        }
                     )
-                    return Response(
-                        html, headers={"content-type": "text/html; charset=utf-8"}
-                    )
-                case ("POST", "/connect/settings"):
+                case ("POST", "/api/settings"):
+                    user = await self.get_or_create_user(id_key.email)
                     return await self.handle_connect_settings(request, user, base)
                 case ("GET", "/connect/strava"):
+                    user = await self.get_or_create_user(id_key.email)
                     return self.handle_strava_start(user, base)
                 case ("GET", "/connect/strava/callback"):
+                    user = await self.get_or_create_user(id_key.email)
                     return await self.handle_strava_callback(request, user, base)
                 case _:
                     return Response("Not Found", status=404)
@@ -223,23 +238,34 @@ class Default(WorkerEntrypoint):
     async def handle_connect_settings(
         self, request: Request, user: User, base: str
     ) -> Response:
-        # Browsers always send Origin on form POSTs; reject anything else
+        """Saves settings from JSON. Answers {"status": <code>} where the
+        code is one the frontend maps to a message (saved, bad_key,
+        bad_timezone)."""
+        # Browsers always send Origin on POSTs; reject anything else
         # so another site can't submit this form with the user's session.
         if request.headers.get("origin") != base:
             return Response("Forbidden", status=403)
-        form = parse_qs(await request.text())
-        liftosaur_api_key = form.get("liftosaur_api_key", [""])[0].strip()
-        timezone = form.get("timezone", [""])[0].strip()
+        try:
+            body = await request.json()
+        except Exception:
+            return Response("Request body must be valid JSON", status=400)
+        if not isinstance(body, dict):
+            return Response("Request body must be a JSON object", status=400)
+        liftosaur_api_key = str(body.get("liftosaur_api_key") or "").strip()
+        timezone = str(body.get("timezone") or "").strip()
+
+        def result(status: str, http: int = 200) -> Response:
+            return Response.from_json({"status": status}, status=http)
 
         try:
             ZoneInfo(timezone)
         except (ZoneInfoNotFoundError, ValueError):
-            return Response.redirect(f"{base}/connect?status=bad_timezone", 303)
+            return result("bad_timezone", 422)
         if (
             liftosaur_api_key
             and not LiftosaurApiSource(liftosaur_api_key).health_check()
         ):
-            return Response.redirect(f"{base}/connect?status=bad_key", 303)
+            return result("bad_key", 422)
 
         db = self.env.liftostrava_users_db
         await (
@@ -261,7 +287,7 @@ class Default(WorkerEntrypoint):
                 .bind(user.user_id, await encrypt(liftosaur_api_key, self.aes_key()))
                 .run()
             )
-        return Response.redirect(f"{base}/connect?status=saved", 303)
+        return result("saved")
 
     def handle_strava_start(self, user: User, base: str) -> Response:
         client_id = self.env.STRAVA_CLIENT_ID
@@ -392,7 +418,7 @@ class Default(WorkerEntrypoint):
 
         return refreshed_tokens.access_token
 
-    async def handle_get(self, id_key: AccessIDKey) -> Response:
+    async def handle_get(self, id_key: AccessIDKey, request: Request) -> Response:
         user = await self.get_user(id_key)
         if user is None:
             return Response.from_json({"error": "User not found"}, status=404)
@@ -401,11 +427,22 @@ class Default(WorkerEntrypoint):
             return Response.from_json(
                 {"error": "User does not have credentials"}, status=404
             )
-        api_source = LiftosaurApiSource(api_key=user.liftosaur_api_key)
+        try:
+            start, end = parse_history_range(
+                parse_qs(urlparse(request.url).query), user.timezone
+            )
+        except HistoryRangeError as e:
+            return Response.from_json({"error": str(e)}, status=400)
 
-        workout_history = api_source.list_history(
-            start_date=datetime.now(UTC) - timedelta(days=5)
-        )
+        try:
+            workout_history = LiftosaurApiSource(
+                api_key=user.liftosaur_api_key
+            ).list_history(start_date=start, end_date=end)
+        except requests.RequestException:
+            logger.exception("Listing Liftosaur history failed")
+            return Response.from_json(
+                {"error": "Could not reach Liftosaur"}, status=502
+            )
         serialised_workout_history = [
             {
                 "id": workout.id,
@@ -413,6 +450,12 @@ class Default(WorkerEntrypoint):
                 "date": datetime.fromisoformat(workout.workout.start_time).strftime(
                     "%Y-%m-%d"
                 ),
+                "start_time": workout.workout.start_time,
+                "duration_s": workout.workout.elapsed_time,
+                "exercises": [
+                    {"name": e.name, "sets": len(e.sets)}
+                    for e in workout.workout.exercises
+                ],
             }
             for workout in sorted(
                 workout_history, key=lambda w: w.workout.start_time, reverse=True

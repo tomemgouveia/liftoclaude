@@ -41,6 +41,33 @@ saved back to that file. Restart the container after a token rotation so
 Wrangler reloads the bindings. The GET handler makes a live request to the
 Liftosaur API.
 
+## Web app
+
+Opening the Worker URL in a browser serves a React app (source in `web/`)
+that lists your Liftosaur workouts for a chosen date range (presets or custom
+from/to dates, up to 366 days) and syncs the one you pick. Build it before
+running or deploying the Worker, because `wrangler.toml` serves `web/dist`:
+
+```sh
+cd web && npm install && npm run build
+```
+
+For UI work, run the Worker (`pywrangler dev`) and then `npm run dev` in
+`web/`; Vite proxies `/api` to `localhost:8787`. When using the Docker
+command above, also mount `web/dist` into `/app/web/dist`.
+
+The Worker's JSON API:
+
+- `GET /api/workouts?start=YYYY-MM-DD&end=YYYY-MM-DD` lists workouts, newest
+  first. Both bounds are inclusive days in the user's timezone and default to
+  the last 7 days.
+- `POST /api/sync` with `{"workout_id": "..."}` syncs one workout.
+- `GET`/`POST /api/settings` read and save the signed-in user's Liftosaur key
+  and timezone for the `/connect` page. `/connect/strava` and
+  `/connect/strava/callback` remain server-side OAuth redirects.
+
+`GET /` (without `Accept: text/html`) and `POST /` still work for Shortcuts.
+
 ## Access authentication for users and Shortcuts
 
 The Worker verifies the `Cf-Access-Jwt-Assertion` header. For a human Access

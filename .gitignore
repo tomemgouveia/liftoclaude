@@ -12,3 +12,5 @@ pylock.toml
 .wrangler/
 private/
 secrets.env
+web/node_modules/
+web/dist/
