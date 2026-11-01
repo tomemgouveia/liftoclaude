@@ -8,12 +8,14 @@ the exact same Liftohistory text format the MCP `get_history`/
 `get_history_record` tools return — see sources/liftohistory.py, the
 actual parser, which this module just feeds.
 
-`GET /api/v1/history` (no id) is the same, but for the full list, paged
+There is no `GET /api/v1/history/:id` endpoint, so a single record is
+found by scanning `GET /api/v1/history`, which returns the full list, paged
 via `cursor`/`hasMore`/`nextCursor` and optionally restricted to a
 `startDate`/`endDate` range — see list_history() below. Response shapes
 confirmed against https://www.liftosaur.com/doc/api on 2026-09-13.
 """
 
+from collections.abc import Iterator
 from datetime import datetime
 
 import requests
@@ -22,6 +24,7 @@ from liftostrava.sources.base import WorkoutEntry
 from liftostrava.sources.liftohistory import parse_liftohistory
 
 API_BASE = "https://www.liftosaur.com/api/v1"
+REQUEST_TIMEOUT_S = 30
 
 
 class LiftosaurApiSource:
@@ -34,28 +37,28 @@ class LiftosaurApiSource:
                 "Premium), then add it to .env — see .env.example."
             )
 
-    def health_check(self) -> bool:
-        """Check if the API key is valid by making a simple request."""
-        try:
-            response = requests.get(
-                f"{API_BASE}/history",
-                headers={"Authorization": f"Bearer {self.api_key}"},
-            )
-            response.raise_for_status()
-            return True
-        except requests.RequestException:
-            return False
+    def _headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self.api_key}"}
 
-    def list_history(
+    def health_check(self) -> bool:
+        """True if the API key is accepted. A rejected key (401/403)
+        returns False; network failures and other errors propagate so
+        they aren't mistaken for a bad key."""
+        response = requests.get(
+            f"{API_BASE}/history", headers=self._headers(), timeout=REQUEST_TIMEOUT_S
+        )
+        if response.status_code in (401, 403):
+            return False
+        response.raise_for_status()
+        return True
+
+    def _iter_records(
         self,
         start_date: datetime | str | None = None,
         end_date: datetime | str | None = None,
-    ) -> list[WorkoutEntry]:
-        """List every workout in Liftosaur's history, newest first,
-        optionally restricted to a `[start_date, end_date]` range (either
-        end may be omitted) — following the API's `cursor`/`hasMore`
-        pagination. Returns a list of WorkoutEntry objects.
-        """
+    ) -> Iterator[dict]:
+        """Yield raw history records, lazily following the API's
+        `cursor`/`hasMore` pagination so callers can stop early."""
 
         def _parse_date(date: datetime | str) -> str:
             if isinstance(date, datetime):
@@ -68,56 +71,47 @@ class LiftosaurApiSource:
         if end_date:
             params["endDate"] = _parse_date(end_date)
 
-        headers = {"Authorization": f"Bearer {self.api_key}"}
-
-        entries = []
         cursor: str | None = None
         while True:
             page_params = dict(params)
             if cursor:
                 page_params["cursor"] = cursor
             resp = requests.get(
-                f"{API_BASE}/history", headers=headers, params=page_params
+                f"{API_BASE}/history",
+                headers=self._headers(),
+                params=page_params,
+                timeout=REQUEST_TIMEOUT_S,
             )
             resp.raise_for_status()
             data = resp.json()["data"]
-            entries.extend(
-                WorkoutEntry(
+            yield from data["records"]
+            if not data.get("hasMore"):
+                return
+            cursor = str(data["nextCursor"])
+
+    def list_history(
+        self,
+        start_date: datetime | str | None = None,
+        end_date: datetime | str | None = None,
+    ) -> list[WorkoutEntry]:
+        """List every workout in Liftosaur's history, newest first,
+        optionally restricted to a `[start_date, end_date]` range (either
+        end may be omitted). Returns a list of WorkoutEntry objects.
+        """
+        return [
+            WorkoutEntry(
+                id=str(record["id"]), workout=parse_liftohistory(record["text"])
+            )
+            for record in self._iter_records(start_date, end_date)
+        ]
+
+    def get_workout(self, workout_id: str) -> WorkoutEntry:
+        """The API has no get-by-id endpoint, so scan the (newest-first)
+        history and stop at the match — only that record is parsed."""
+        for record in self._iter_records():
+            if str(record["id"]) == str(workout_id):
+                return WorkoutEntry(
                     id=str(record["id"]),
                     workout=parse_liftohistory(record["text"]),
                 )
-                for record in data["records"]
-            )
-            if not data.get("hasMore"):
-                break
-            cursor = str(data["nextCursor"])
-        return entries
-
-    def get_workout(self, workout_id: str) -> WorkoutEntry:
-        response = requests.get(
-            f"{API_BASE}/history/",
-            headers={"Authorization": f"Bearer {self.api_key}"},
-            timeout=30,
-        )
-        response.raise_for_status()
-        record = next(
-            (
-                record
-                for record in response.json()["data"]["records"]
-                if str(record["id"]) == str(workout_id)
-            ),
-            None,
-        )
-        if record is None:
-            entry = next(
-                (entry for entry in self.list_history() if entry.id == str(workout_id)),
-                None,
-            )
-            if entry is None:
-                raise LookupError(f"Workout {workout_id!r} was not found in history")
-            return entry
-
-        return WorkoutEntry(
-            id=str(record["id"]),
-            workout=parse_liftohistory(record["text"]),
-        )
+        raise LookupError(f"Workout {workout_id!r} was not found in history")

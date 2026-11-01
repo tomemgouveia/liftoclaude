@@ -1,6 +1,9 @@
+import asyncio
 import logging
-from datetime import datetime, timedelta
-from typing import cast
+import time
+from datetime import UTC, datetime, timedelta
+from typing import Any, cast
+from zoneinfo import ZoneInfo
 
 import requests
 from workers import Request, Response, WorkerEntrypoint
@@ -8,7 +11,35 @@ from workers import Request, Response, WorkerEntrypoint
 from cloudflare import AccessIDKey, User, process_jwt
 from liftostrava.sources.api import LiftosaurApiSource
 from liftostrava.strava.auth import StravaTokens, refresh_strava_tokens
-from liftostrava.strava.client import poll_upload, set_muted, upload_activity
+from liftostrava.strava.client import (
+    fetch_upload_status,
+    set_muted,
+    upload_activity,
+    upload_timeout_error,
+)
+from liftostrava.strava.payload import default_utc_offset
+
+UPLOAD_POLL_TIMEOUT_S = 30
+
+
+def _to_python(value: Any) -> Any:
+    """D1 rows arrive as JsProxy objects under Pyodide; plain dicts
+    (e.g. in tests) pass through."""
+    return value.to_py() if hasattr(value, "to_py") else value
+
+
+async def poll_upload_async(access_token: str, upload_id: int) -> dict:
+    """poll_upload with asyncio.sleep, so the worker's event loop isn't
+    blocked while Strava processes the upload."""
+    status = None
+    deadline = time.time() + UPLOAD_POLL_TIMEOUT_S
+    while time.time() < deadline:
+        status = fetch_upload_status(access_token, upload_id)
+        if status.get("activity_id"):
+            return status
+        await asyncio.sleep(1)
+    raise upload_timeout_error(status)
+
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +90,7 @@ class Default(WorkerEntrypoint):
                 u.email,
                 u.name,
                 c.user_id IS NOT NULL AS has_credentials,
+                u.timezone,
                 c.liftosaur_api_key,
                 c.strava_refresh_token,
                 c.strava_access_token,
@@ -89,48 +121,67 @@ class Default(WorkerEntrypoint):
 
         if not query.results:
             return None
-        return User(**query.results[0])
+        row = _to_python(query.results[0])
+        row["has_credentials"] = bool(row["has_credentials"])
+        return User(**row)
 
     async def handle_post(self, request: Request, id_key: AccessIDKey) -> Response:
         try:
-            credentials = await self.get_user(id_key)
-            if credentials is None or not credentials.has_credentials:
+            body = await request.json()
+        except Exception:
+            return Response("Request body must be valid JSON", status=400)
+        workout_id = body.get("workout_id") if isinstance(body, dict) else None
+        if not isinstance(workout_id, (str, int)) or isinstance(workout_id, bool):
+            return Response("'workout_id' is required", status=400)
+        workout_id = str(workout_id)
+        force = isinstance(body, dict) and body.get("force") is True
+
+        try:
+            user = await self.get_user(id_key)
+            if user is None or not user.has_credentials:
                 return Response("User or credentials not found", status=404)
 
-            if not credentials.liftosaur_api_key:
+            if not user.liftosaur_api_key:
                 return Response(
                     "Liftosaur API key is not configured for this user", status=400
                 )
 
-            # 1. Fetch latest workout session using LiftosaurSource
-            liftosaur_source = LiftosaurApiSource(api_key=credentials.liftosaur_api_key)
+            if not force and await self.is_already_synced(user.user_id, workout_id):
+                return Response(
+                    "Workout was already synced; pass force=true to upload it again",
+                    status=409,
+                )
 
-            body = await request.json()
-            workout_id = body.get("workout_id")
+            workout_entry = LiftosaurApiSource(
+                api_key=user.liftosaur_api_key
+            ).get_workout(workout_id=workout_id)
+            workout = workout_entry.workout
 
-            workout_entry = liftosaur_source.get_workout(workout_id=workout_id)
+            # Strava's local-time display needs the user's own timezone.
+            if user.timezone:
+                workout.utc_offset = default_utc_offset(
+                    workout.start_time, ZoneInfo(user.timezone)
+                )
 
-            # 2. Reuse a still-valid token or refresh and persist the rotated pair.
-            access_token = await self.get_strava_access_token(credentials)
+            # Reuse a still-valid token or refresh and persist the rotated pair.
+            access_token = await self.get_strava_access_token(user)
 
-            # 4. Upload to Strava API
-            upload = upload_activity(
-                access_token, workout_entry.workout, "WeightTraining"
-            )
+            upload = upload_activity(access_token, workout, "WeightTraining")
             upload_id = upload["id"]
 
-            print(
-                f"Upload accepted (id={upload_id}), waiting for Strava to process it..."
-            )
-            status = poll_upload(access_token, upload_id)
+            logger.info("Upload accepted (id=%s), waiting for processing", upload_id)
+            status = await poll_upload_async(access_token, upload_id)
             activity_id = status["activity_id"]
 
-            print("Muting activity from home feed (hide_from_home=true)...")
+            logger.info("Muting activity %s (hide_from_home=true)", activity_id)
             set_muted(access_token, activity_id, True)
 
-            # return Response(f"Successfully uploaded '{workout.title}' to Strava!")
-            return Response(f"Uploaded to Strava: {workout_entry.workout.name}!")
+            await self.record_synced(user.user_id, workout_id, activity_id)
 
+            return Response(f"Uploaded to Strava: {workout.name}!")
+
+        except LookupError as e:
+            return Response(str(e), status=404)
         except Exception as e:
             if isinstance(e, requests.HTTPError) and e.response is not None:
                 logger.exception(
@@ -140,13 +191,35 @@ class Default(WorkerEntrypoint):
                 )
             else:
                 logger.exception("Workout sync failed")
-            return Response(
-                f"Sync failed ({type(e).__name__}): {e!s}",
-                status=500,
+            # Details stay in the logs; callers only get the error class.
+            return Response(f"Sync failed ({type(e).__name__})", status=500)
+
+    async def is_already_synced(self, user_id: str, liftosaur_id: str) -> bool:
+        query = (
+            await self.env.liftostrava_users_db.prepare(
+                "SELECT 1 FROM synced_workouts WHERE user_id = ? AND liftosaur_id = ?"
             )
+            .bind(user_id, liftosaur_id)
+            .run()
+        )
+        return bool(query.results)
+
+    async def record_synced(
+        self, user_id: str, liftosaur_id: str, activity_id: int
+    ) -> None:
+        await (
+            self.env.liftostrava_users_db.prepare(
+                """
+                INSERT OR REPLACE INTO synced_workouts
+                    (user_id, liftosaur_id, strava_activity_id)
+                VALUES (?, ?, ?)
+                """
+            )
+            .bind(user_id, liftosaur_id, activity_id)
+            .run()
+        )
 
     async def get_strava_access_token(self, credentials: User) -> str:
-
         if not credentials.strava_refresh_token:
             raise RuntimeError("Strava is not connected for this user")
 
@@ -175,7 +248,7 @@ class Default(WorkerEntrypoint):
         api_source = LiftosaurApiSource(api_key=user.liftosaur_api_key)
 
         workout_history = api_source.list_history(
-            start_date=datetime.today() - timedelta(days=5)
+            start_date=datetime.now(UTC) - timedelta(days=5)
         )
         serialised_workout_history = [
             {

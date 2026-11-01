@@ -21,7 +21,10 @@ are still just guesses — if one comes back "Unknown", check the live
 docs page before guessing again.
 """
 
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 EXERCISE_TYPE_MAP = {
     "Squat": "BARBELL_BACK_SQUAT",  # docs
@@ -79,4 +82,11 @@ def exercise_type_for(name: str) -> str:
     # punctuation Strava doesn't expect (e.g. "Standing Calf Raise, Cable")
     # previously left stray characters like commas in the enum value here,
     # which rendered as "Unknown" in the app.
-    return re.sub(r"[^A-Za-z0-9]+", "_", name.strip()).strip("_").upper()
+    guess = re.sub(r"[^A-Za-z0-9]+", "_", name.strip()).strip("_").upper()
+    logger.warning(
+        "No Strava exercise_type mapping for %r; guessing %s (may render as "
+        "'Unknown'). Add it to EXERCISE_TYPE_MAP.",
+        name,
+        guess,
+    )
+    return guess

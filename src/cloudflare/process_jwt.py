@@ -12,6 +12,11 @@ from cloudflare.models import AccessIDKey
 
 logger = logging.getLogger(__name__)
 
+JWKS_CACHE_TTL_SECONDS = 3600
+# issuer -> (fetched_at, jwks). Module-level, so it lives as long as the
+# Worker isolate does; a rotated key just means a cache miss on `kid`.
+_jwks_cache: dict[str, tuple[float, Any]] = {}
+
 
 def get_id_key_from_claims(claims: dict[str, Any]) -> AccessIDKey | None:
     common_name = claims.get("common_name")
@@ -68,9 +73,14 @@ async def process_jwt(
         from pyodide.ffi import to_js
         from workers import fetch
 
-        keys_response = await fetch(f"{issuer}/cdn-cgi/access/certs")
-        keys_response.raise_for_status()
-        jwks = json.loads(await keys_response.text())
+        cached = _jwks_cache.get(issuer)
+        if cached is not None and time.time() - cached[0] < JWKS_CACHE_TTL_SECONDS:
+            jwks = cached[1]
+        else:
+            keys_response = await fetch(f"{issuer}/cdn-cgi/access/certs")
+            keys_response.raise_for_status()
+            jwks = json.loads(await keys_response.text())
+            _jwks_cache[issuer] = (time.time(), jwks)
         keys = jwks.get("keys") if isinstance(jwks, dict) else None
         if not isinstance(keys, list):
             raise TypeError("Invalid Access signing keys")
@@ -87,6 +97,7 @@ async def process_jwt(
             None,
         )
         if signing_key is None:
+            _jwks_cache.pop(issuer, None)
             logger.warning("No matching Cloudflare Access signing key")
             return None
 

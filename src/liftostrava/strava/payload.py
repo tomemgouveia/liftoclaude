@@ -27,13 +27,13 @@ ATHLETE_TIMEZONE = ZoneInfo("Europe/London")
 LB_TO_KG = 0.45359237
 
 
-def default_utc_offset(start_time_iso: str) -> int:
-    """Seconds to add to a UTC start_time to get ATHLETE_TIMEZONE's local
-    time, computed at that specific instant so DST transitions (BST vs GMT)
+def default_utc_offset(start_time_iso: str, tz: ZoneInfo = ATHLETE_TIMEZONE) -> int:
+    """Seconds to add to a UTC start_time to get `tz`'s local
+    time (default ATHLETE_TIMEZONE), computed at that specific instant so DST transitions (BST vs GMT)
     are handled correctly rather than baking in a fixed offset."""
     # fromisoformat() has accepted a trailing "Z" natively since Python 3.11.
     dt = datetime.fromisoformat(start_time_iso)
-    offset = dt.astimezone(ATHLETE_TIMEZONE).utcoffset()
+    offset = dt.astimezone(tz).utcoffset()
     # utcoffset() is typed as returning Optional[timedelta] since tzinfo is
     # a general interface, but a zoneinfo-backed datetime always has one.
     assert offset is not None

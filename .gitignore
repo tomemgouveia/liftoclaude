@@ -10,3 +10,4 @@ python_modules/
 pylock.toml
 *sandbox*.*
 .wrangler/
+private/

@@ -17,6 +17,9 @@ class User:
     name: str
     has_credentials: bool
     liftosaur_api_key: str | None = None
+    # IANA name (e.g. "Europe/London") used for Strava's local start time;
+    # None falls back to payload.ATHLETE_TIMEZONE.
+    timezone: str | None = None
 
     # the strava access token allows the worker to make strava API calls
     strava_access_token: str | None = None

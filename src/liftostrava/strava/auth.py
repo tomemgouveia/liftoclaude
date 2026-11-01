@@ -6,10 +6,10 @@ import re
 from dataclasses import dataclass
 
 import requests
-from dotenv import get_key, set_key
 
 from liftostrava.config import ENV_PATH
 
+REQUEST_TIMEOUT_S = 30
 SCOPE = "activity:write,activity:read_all"
 REDIRECT_URI = "http://localhost/exchange_token"
 
@@ -39,7 +39,8 @@ def extract_code(raw: str) -> str:
 
 
 def exchange_authorization_code(client_id: str, client_secret: str, code: str) -> dict:
-    """One-time exchange of an authorization code for tokens. Raises via
+    """One-time exchange of an authorization code for tokens (the caller
+    persists the refresh token — see save_refresh_token_to_env). Raises via
     raise_for_status() on failure; the caller (cli/auth.py) handles that
     with more specific guidance since the common causes are user-facing
     (stale code, wrong credentials)."""
@@ -51,11 +52,10 @@ def exchange_authorization_code(client_id: str, client_secret: str, code: str) -
             "code": code,
             "grant_type": "authorization_code",
         },
+        timeout=REQUEST_TIMEOUT_S,
     )
     resp.raise_for_status()
-    tokens = resp.json()
-    set_key(ENV_PATH, "STRAVA_REFRESH_TOKEN", tokens["refresh_token"])
-    return tokens
+    return resp.json()
 
 
 def refresh_strava_tokens(
@@ -69,22 +69,30 @@ def refresh_strava_tokens(
             "refresh_token": refresh_token,
             "grant_type": "refresh_token",
         },
+        timeout=REQUEST_TIMEOUT_S,
     )
     resp.raise_for_status()
     data = resp.json()
 
     return StravaTokens(
         access_token=data.get("access_token"),
-        refresh_token=data.get(
-            "refresh_token", get_key(ENV_PATH, "STRAVA_REFRESH_TOKEN")
-        ),
+        # Strava may omit a rotated token; keep using the one we sent.
+        refresh_token=data.get("refresh_token", refresh_token),
         expires_at=data.get("expires_at"),
     )
 
 
+def save_refresh_token_to_env(refresh_token: str) -> None:
+    """Persist the refresh token to .env (CLI only — the worker keeps
+    tokens in D1). Skips the write when the value is unchanged. The
+    access token and expiry aren't persisted: they're re-derived from
+    the refresh token on every run."""
+    from dotenv import get_key, set_key
+
+    if refresh_token != get_key(ENV_PATH, "STRAVA_REFRESH_TOKEN"):
+        set_key(ENV_PATH, "STRAVA_REFRESH_TOKEN", refresh_token)
+
+
 def save_strava_tokens_to_env(tokens: StravaTokens) -> None:
     # Strava rotates refresh tokens on some accounts; persist the latest.
-    if tokens.refresh_token != get_key(ENV_PATH, "STRAVA_REFRESH_TOKEN"):
-        set_key(ENV_PATH, "STRAVA_REFRESH_TOKEN", tokens.refresh_token)
-        set_key(ENV_PATH, "STRAVA_ACCESS_TOKEN", tokens.access_token)
-        set_key(ENV_PATH, "STRAVA_EXPIRES_AT", str(tokens.expires_at))
+    save_refresh_token_to_env(tokens.refresh_token)

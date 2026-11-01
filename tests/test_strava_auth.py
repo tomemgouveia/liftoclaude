@@ -45,6 +45,8 @@ def test_exchange_authorization_code_persists_the_refresh_token(tmp_path, monkey
     tokens = auth.exchange_authorization_code("cid", "csecret", "auth-code")
 
     assert tokens["athlete"]["firstname"] == "Tome"
+    # Exchanging no longer writes .env itself; the CLI persists it.
+    auth.save_refresh_token_to_env(tokens["refresh_token"])
     assert "STRAVA_REFRESH_TOKEN='initial-refresh'" in env_file.read_text()
 
 
@@ -98,3 +100,17 @@ def test_refresh_strava_tokens_skips_rewrite_when_refresh_token_is_unchanged(
 
     # No rewrite at all — not even a reformatted but value-equal line.
     assert env_file.read_text() == before
+
+
+@responses.activate
+def test_refresh_keeps_the_sent_refresh_token_when_strava_omits_one():
+    responses.add(
+        responses.POST,
+        "https://www.strava.com/oauth/token",
+        json={"access_token": "new-access", "expires_at": 1234567890},
+        status=200,
+    )
+
+    tokens = auth.refresh_strava_tokens("cid", "csecret", "sent-refresh")
+
+    assert tokens.refresh_token == "sent-refresh"
