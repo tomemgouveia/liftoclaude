@@ -71,30 +71,42 @@ Use the Client ID value ending in `.access`, not the Client Secret. A service
 token identifies the Shortcut, not a human, so sharing one token between users
 would make their requests indistinguishable.
 
+## Onboarding a user
+
+1. In Cloudflare Zero Trust, create a service token for the user's
+   Shortcut and add it to the Access application's policy. Add the user's
+   email to a policy too, so they can sign in to the onboarding page.
+2. Ask the user to open `https://<worker>/connect` and sign in with that
+   email. This creates their `users` row. There they paste their Liftosaur
+   API key (Settings > API Keys, Premium), confirm their timezone, and click
+   **Connect Strava**.
+3. Link their service token to the row (see the `UPDATE` above) and give
+   them the Client ID and Secret for their Shortcut headers.
+
+Credentials (Liftosaur key, Strava tokens) are stored AES-GCM encrypted in
+D1 using `CREDENTIALS_SECRET`. Rows saved before encryption was added are
+read as plaintext and are encrypted the next time they are saved.
+
 ## Deploy
 
-The Worker stores the current Strava access token, refresh token, and expiry in
-Cloudflare KV. Create a namespace, then replace the placeholder namespace ID
-in `wrangler.toml` with the ID printed by Wrangler:
+Apply the D1 migrations once (`users.timezone` and the nullable
+`credentials` columns; the SQL lives in the gitignored
+`private/d1.py`).
 
-```sh
-npx wrangler kv namespace create STRAVA_TOKEN_STORE
-```
+In your Strava API settings (strava.com/settings/api) set **Authorization
+Callback Domain** to the Worker's domain.
 
-Set the required secrets and deploy:
+Set the secrets and deploy:
 
 ```sh
 npx wrangler secret put STRAVA_CLIENT_ID
 npx wrangler secret put STRAVA_CLIENT_SECRET
-npx wrangler secret put STRAVA_REFRESH_TOKEN
-npx wrangler secret put LIFTOSAUR_API_KEY
+openssl rand -base64 32 | npx wrangler secret put CREDENTIALS_SECRET
 npx wrangler deploy
 ```
 
-`STRAVA_REFRESH_TOKEN` is only the bootstrap value used when KV has no token
-state. After the first successful refresh, the Worker stores and uses the
-rotated token pair in KV.
+Keep a backup of `CREDENTIALS_SECRET`: losing it makes every stored
+credential unreadable and every user has to reconnect.
 
-Local `wrangler dev` uses a local KV store and does not share the production
-namespace contents. Avoid concurrent sync requests: KV is eventually
-consistent, so concurrent refreshes can race while Strava rotates tokens.
+Avoid concurrent sync requests for the same user: concurrent token
+refreshes can race while Strava rotates refresh tokens.

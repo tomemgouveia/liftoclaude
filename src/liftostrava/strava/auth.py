@@ -4,6 +4,7 @@ strava/client.py)."""
 
 import re
 from dataclasses import dataclass
+from urllib.parse import quote
 
 import requests
 
@@ -21,15 +22,20 @@ class StravaTokens:
     expires_at: int
 
 
-def build_authorize_url(client_id: str) -> str:
-    return (
+def build_authorize_url(
+    client_id: str, redirect_uri: str = REDIRECT_URI, state: str | None = None
+) -> str:
+    url = (
         "https://www.strava.com/oauth/authorize"
         f"?client_id={client_id}"
-        f"&redirect_uri={REDIRECT_URI}"
+        f"&redirect_uri={redirect_uri}"
         "&response_type=code"
         "&approval_prompt=force"
         f"&scope={SCOPE}"
     )
+    if state is not None:
+        url += f"&state={quote(state, safe='')}"
+    return url
 
 
 def extract_code(raw: str) -> str:

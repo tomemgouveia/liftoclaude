@@ -11,3 +11,4 @@ pylock.toml
 *sandbox*.*
 .wrangler/
 private/
+secrets.env

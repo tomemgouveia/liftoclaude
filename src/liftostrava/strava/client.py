@@ -14,6 +14,11 @@ from liftostrava.strava.payload import build_strava_payload
 REQUEST_TIMEOUT_S = 30
 
 
+class StravaUploadError(RuntimeError):
+    """Strava processed the upload and reported an error (e.g. it is a
+    duplicate of an existing activity)."""
+
+
 def strava_form_fields(workout: Workout, sport_type: str) -> dict:
     """The non-file form fields sent with an upload — also used by
     cli/sync.py's --dry-run preview, so the two can't silently diverge.
@@ -72,7 +77,7 @@ def fetch_upload_status(access_token: str, upload_id: int) -> dict:
     resp.raise_for_status()
     status = resp.json()
     if status.get("error"):
-        raise RuntimeError(f"Strava upload failed: {status['error']}")
+        raise StravaUploadError(f"Strava upload failed: {status['error']}")
     return status
 
 

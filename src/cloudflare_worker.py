@@ -1,17 +1,34 @@
 import asyncio
 import logging
 import time
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
-from zoneinfo import ZoneInfo
+from urllib.parse import parse_qs, urlparse
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import requests
 from workers import Request, Response, WorkerEntrypoint
 
 from cloudflare import AccessIDKey, User, process_jwt
+from cloudflare.connect_page import render_connect_page
+from cloudflare.credential_crypto import (
+    AES_LABEL,
+    STATE_LABEL,
+    decrypt,
+    derive_key,
+    encrypt,
+)
+from cloudflare.oauth_state import sign_state, verify_state
 from liftostrava.sources.api import LiftosaurApiSource
-from liftostrava.strava.auth import StravaTokens, refresh_strava_tokens
+from liftostrava.strava.auth import (
+    StravaTokens,
+    build_authorize_url,
+    exchange_authorization_code,
+    refresh_strava_tokens,
+)
 from liftostrava.strava.client import (
+    StravaUploadError,
     fetch_upload_status,
     set_muted,
     upload_activity,
@@ -44,11 +61,20 @@ async def poll_upload_async(access_token: str, upload_id: int) -> dict:
 logger = logging.getLogger(__name__)
 
 
+def _origin(url: str) -> str:
+    parts = urlparse(url)
+    return f"{parts.scheme}://{parts.netloc}"
+
+
 class Default(WorkerEntrypoint):
     async def fetch(self, request: Request) -> Response:
         id_key = await self.get_access_id_key(request)
         if id_key is None:
             return Response("Cloudflare Access authentication required", status=401)
+
+        path = urlparse(request.url).path.rstrip("/") or "/"
+        if path.startswith("/connect"):
+            return await self.handle_connect(request, id_key, path)
 
         match request.method:
             case "POST":
@@ -123,7 +149,164 @@ class Default(WorkerEntrypoint):
             return None
         row = _to_python(query.results[0])
         row["has_credentials"] = bool(row["has_credentials"])
+        for field in (
+            "liftosaur_api_key",
+            "strava_access_token",
+            "strava_refresh_token",
+        ):
+            if row.get(field):
+                row[field] = await decrypt(row[field], self.aes_key())
         return User(**row)
+
+    def secret_key(self, label: bytes) -> bytes:
+        master = self.env.CREDENTIALS_SECRET
+        if not isinstance(master, str) or not master:
+            raise RuntimeError("CREDENTIALS_SECRET is not configured")
+        return derive_key(master, label)
+
+    def aes_key(self) -> bytes:
+        return self.secret_key(AES_LABEL)
+
+    async def get_or_create_user(self, email: str) -> User:
+        id_key = AccessIDKey(email=email)
+        user = await self.get_user(id_key)
+        if user is None:
+            await (
+                self.env.liftostrava_users_db.prepare(
+                    "INSERT OR IGNORE INTO users (id, email, name) VALUES (?, ?, ?)"
+                )
+                .bind(str(uuid.uuid4()), email, email.split("@")[0])
+                .run()
+            )
+            user = await self.get_user(id_key)
+        if user is None:
+            raise RuntimeError("Could not create user")
+        return user
+
+    async def handle_connect(
+        self, request: Request, id_key: AccessIDKey, path: str
+    ) -> Response:
+        """Self-service onboarding: a signed-in (email) user saves their
+        Liftosaur key and timezone and connects Strava via OAuth."""
+        if id_key.email is None:
+            return Response("Sign in with your email to use this page", status=403)
+        base = _origin(request.url)
+        try:
+            user = await self.get_or_create_user(id_key.email)
+            match (request.method, path):
+                case ("GET", "/connect"):
+                    status = parse_qs(urlparse(request.url).query).get("status", [""])[
+                        0
+                    ]
+                    html = render_connect_page(
+                        email=user.email,
+                        liftosaur_set=bool(user.liftosaur_api_key),
+                        strava_connected=bool(user.strava_refresh_token),
+                        timezone=user.timezone,
+                        status=status,
+                    )
+                    return Response(
+                        html, headers={"content-type": "text/html; charset=utf-8"}
+                    )
+                case ("POST", "/connect/settings"):
+                    return await self.handle_connect_settings(request, user, base)
+                case ("GET", "/connect/strava"):
+                    return self.handle_strava_start(user, base)
+                case ("GET", "/connect/strava/callback"):
+                    return await self.handle_strava_callback(request, user, base)
+                case _:
+                    return Response("Not Found", status=404)
+        except Exception:
+            logger.exception("Connect flow failed")
+            return Response("Something went wrong", status=500)
+
+    async def handle_connect_settings(
+        self, request: Request, user: User, base: str
+    ) -> Response:
+        # Browsers always send Origin on form POSTs; reject anything else
+        # so another site can't submit this form with the user's session.
+        if request.headers.get("origin") != base:
+            return Response("Forbidden", status=403)
+        form = parse_qs(await request.text())
+        liftosaur_api_key = form.get("liftosaur_api_key", [""])[0].strip()
+        timezone = form.get("timezone", [""])[0].strip()
+
+        try:
+            ZoneInfo(timezone)
+        except (ZoneInfoNotFoundError, ValueError):
+            return Response.redirect(f"{base}/connect?status=bad_timezone", 303)
+        if (
+            liftosaur_api_key
+            and not LiftosaurApiSource(liftosaur_api_key).health_check()
+        ):
+            return Response.redirect(f"{base}/connect?status=bad_key", 303)
+
+        db = self.env.liftostrava_users_db
+        await (
+            db.prepare("UPDATE users SET timezone = ? WHERE id = ?")
+            .bind(timezone, user.user_id)
+            .run()
+        )
+        if liftosaur_api_key:
+            await (
+                db.prepare(
+                    """
+                    INSERT INTO credentials (user_id, liftosaur_api_key)
+                    VALUES (?, ?)
+                    ON CONFLICT(user_id) DO UPDATE SET
+                        liftosaur_api_key = excluded.liftosaur_api_key,
+                        updated_at = unixepoch()
+                    """
+                )
+                .bind(user.user_id, await encrypt(liftosaur_api_key, self.aes_key()))
+                .run()
+            )
+        return Response.redirect(f"{base}/connect?status=saved", 303)
+
+    def handle_strava_start(self, user: User, base: str) -> Response:
+        client_id = self.env.STRAVA_CLIENT_ID
+        if not isinstance(client_id, str):
+            raise TypeError("STRAVA_CLIENT_ID is not configured")
+        state = sign_state(user.user_id, self.secret_key(STATE_LABEL))
+        return Response.redirect(
+            build_authorize_url(client_id, f"{base}/connect/strava/callback", state)
+        )
+
+    async def handle_strava_callback(
+        self, request: Request, user: User, base: str
+    ) -> Response:
+        params = parse_qs(urlparse(request.url).query)
+
+        def back(status: str) -> Response:
+            return Response.redirect(f"{base}/connect?status={status}", 303)
+
+        if "error" in params:
+            return back("strava_denied")
+        state_user = verify_state(
+            params.get("state", [""])[0], self.secret_key(STATE_LABEL)
+        )
+        if state_user != user.user_id:
+            return back("bad_state")
+        code = params.get("code", [""])[0]
+        if not code:
+            return back("strava_failed")
+        if "activity:write" not in params.get("scope", [""])[0].split(","):
+            return back("strava_scope")
+
+        try:
+            data = exchange_authorization_code(
+                self.env.STRAVA_CLIENT_ID, self.env.STRAVA_CLIENT_SECRET, code
+            )
+            tokens = StravaTokens(
+                access_token=data["access_token"],
+                refresh_token=data["refresh_token"],
+                expires_at=data["expires_at"],
+            )
+        except (requests.RequestException, KeyError):
+            logger.exception("Strava token exchange failed")
+            return back("strava_failed")
+        await self.update_user_strava_tokens(user.user_id, tokens)
+        return back("strava_connected")
 
     async def handle_post(self, request: Request, id_key: AccessIDKey) -> Response:
         try:
@@ -134,7 +317,6 @@ class Default(WorkerEntrypoint):
         if not isinstance(workout_id, (str, int)) or isinstance(workout_id, bool):
             return Response("'workout_id' is required", status=400)
         workout_id = str(workout_id)
-        force = isinstance(body, dict) and body.get("force") is True
 
         try:
             user = await self.get_user(id_key)
@@ -143,14 +325,10 @@ class Default(WorkerEntrypoint):
 
             if not user.liftosaur_api_key:
                 return Response(
-                    "Liftosaur API key is not configured for this user", status=400
+                    "Liftosaur API key is not configured; visit /connect", status=400
                 )
-
-            if not force and await self.is_already_synced(user.user_id, workout_id):
-                return Response(
-                    "Workout was already synced; pass force=true to upload it again",
-                    status=409,
-                )
+            if not user.strava_refresh_token:
+                return Response("Strava is not connected; visit /connect", status=400)
 
             workout_entry = LiftosaurApiSource(
                 api_key=user.liftosaur_api_key
@@ -176,12 +354,15 @@ class Default(WorkerEntrypoint):
             logger.info("Muting activity %s (hide_from_home=true)", activity_id)
             set_muted(access_token, activity_id, True)
 
-            await self.record_synced(user.user_id, workout_id, activity_id)
-
             return Response(f"Uploaded to Strava: {workout.name}!")
 
         except LookupError as e:
             return Response(str(e), status=404)
+        except StravaUploadError as e:
+            if "duplicate" in str(e).lower():
+                return Response("Strava already has this workout", status=409)
+            logger.exception("Strava rejected the upload")
+            return Response("Sync failed (StravaUploadError)", status=500)
         except Exception as e:
             if isinstance(e, requests.HTTPError) and e.response is not None:
                 logger.exception(
@@ -193,31 +374,6 @@ class Default(WorkerEntrypoint):
                 logger.exception("Workout sync failed")
             # Details stay in the logs; callers only get the error class.
             return Response(f"Sync failed ({type(e).__name__})", status=500)
-
-    async def is_already_synced(self, user_id: str, liftosaur_id: str) -> bool:
-        query = (
-            await self.env.liftostrava_users_db.prepare(
-                "SELECT 1 FROM synced_workouts WHERE user_id = ? AND liftosaur_id = ?"
-            )
-            .bind(user_id, liftosaur_id)
-            .run()
-        )
-        return bool(query.results)
-
-    async def record_synced(
-        self, user_id: str, liftosaur_id: str, activity_id: int
-    ) -> None:
-        await (
-            self.env.liftostrava_users_db.prepare(
-                """
-                INSERT OR REPLACE INTO synced_workouts
-                    (user_id, liftosaur_id, strava_activity_id)
-                VALUES (?, ?, ?)
-                """
-            )
-            .bind(user_id, liftosaur_id, activity_id)
-            .run()
-        )
 
     async def get_strava_access_token(self, credentials: User) -> str:
         if not credentials.strava_refresh_token:
@@ -268,15 +424,23 @@ class Default(WorkerEntrypoint):
         self, user_id: str, tokens: StravaTokens
     ) -> None:
         sql = """
-            UPDATE credentials
-            SET strava_access_token = ?,
-                strava_refresh_token = ?,
-                strava_expires_at = ?,
+            INSERT INTO credentials
+                (user_id, strava_access_token, strava_refresh_token, strava_expires_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                strava_access_token = excluded.strava_access_token,
+                strava_refresh_token = excluded.strava_refresh_token,
+                strava_expires_at = excluded.strava_expires_at,
                 updated_at = unixepoch()
-            WHERE user_id = ?
             """
+        key = self.aes_key()
         await (
             self.env.liftostrava_users_db.prepare(sql)
-            .bind(tokens.access_token, tokens.refresh_token, tokens.expires_at, user_id)
+            .bind(
+                user_id,
+                await encrypt(tokens.access_token, key),
+                await encrypt(tokens.refresh_token, key),
+                tokens.expires_at,
+            )
             .run()
         )
