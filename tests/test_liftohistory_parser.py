@@ -5,6 +5,8 @@ on 2026-09-13) plus the reference doc's synthetic edge cases, so every
 case here is exercised with no mocking or I/O.
 """
 
+import pytest
+
 from liftostrava.models import Exercise, Set, Workout
 from liftostrava.sources.liftohistory import parse_liftohistory
 
@@ -171,3 +173,17 @@ def test_no_exercises_block_content_gives_an_empty_exercise_list():
     text = "2026-01-15T10:00:00Z / duration: 60s / exercises: {\n}"
     workout = parse_liftohistory(text)
     assert workout.exercises == []
+
+
+def test_unparseable_set_group_raises_instead_of_dropping_the_exercise():
+    text = (
+        '2026-09-11 17:30:05 +00:00 / program: "P" / exercises: {\n  Plank / 3x30s\n}'
+    )
+    with pytest.raises(ValueError, match="Plank"):
+        parse_liftohistory(text)
+
+
+@pytest.mark.parametrize("text", ["", "   \n", "// just a note"])
+def test_empty_record_raises_value_error(text):
+    with pytest.raises(ValueError):
+        parse_liftohistory(text)

@@ -86,7 +86,7 @@ def test_dry_run_from_api_fetches_and_parses_via_the_rest_api(monkeypatch, capsy
     )
     responses.add(
         responses.GET,
-        "https://www.liftosaur.com/api/v1/history/",
+        "https://www.liftosaur.com/api/v1/history",
         json={
             "data": {
                 "records": [

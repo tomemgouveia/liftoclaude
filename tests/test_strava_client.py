@@ -156,3 +156,16 @@ def test_set_muted_sends_a_lowercase_string_value():
     client.set_muted("token", 123, True)
 
     assert responses.calls[0].request.body == "hide_from_home=true"
+
+
+@responses.activate
+def test_duplicate_upload_raises_a_typed_error():
+    responses.add(
+        responses.GET,
+        "https://www.strava.com/api/v3/uploads/9",
+        json={"error": "duplicate of activity 123", "activity_id": None},
+        status=200,
+    )
+
+    with pytest.raises(client.StravaUploadError, match="duplicate"):
+        client.poll_upload("token", 9, timeout_s=5)

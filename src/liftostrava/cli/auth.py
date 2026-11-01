@@ -22,6 +22,7 @@ from liftostrava.strava.auth import (
     build_authorize_url,
     exchange_authorization_code,
     extract_code,
+    save_refresh_token_to_env,
 )
 
 
@@ -81,6 +82,7 @@ def main():
         )
         sys.exit(1)
 
+    save_refresh_token_to_env(tokens["refresh_token"])
     athlete = tokens.get("athlete", {})
     print(
         f"\nAuthorized as {athlete.get('firstname', '')} {athlete.get('lastname', '')}."

@@ -1,9 +1,4 @@
-"""Locks in strava/auth.py: build_authorize_url/extract_code (the pure
-pieces of the one-time interactive authorization flow, pulled out into
-standalone functions specifically so they could be tested directly), and
-refresh_access_token/exchange_authorization_code's token-rotation
-handling — both persist to a real .env file, but only write when Strava
-actually returned a different refresh_token than they were given."""
+"""Exercise the Strava authorization helpers and token persistence."""
 
 import pytest
 import responses
@@ -50,11 +45,13 @@ def test_exchange_authorization_code_persists_the_refresh_token(tmp_path, monkey
     tokens = auth.exchange_authorization_code("cid", "csecret", "auth-code")
 
     assert tokens["athlete"]["firstname"] == "Tome"
+    # Exchanging no longer writes .env itself; the CLI persists it.
+    auth.save_refresh_token_to_env(tokens["refresh_token"])
     assert "STRAVA_REFRESH_TOKEN='initial-refresh'" in env_file.read_text()
 
 
 @responses.activate
-def test_refresh_access_token_persists_a_rotated_refresh_token(tmp_path, monkeypatch):
+def test_refresh_strava_tokens_persists_a_rotated_refresh_token(tmp_path, monkeypatch):
     # A real .env file rather than a mocked set_key: this verifies the
     # actual persisted state, not just that some function was called with
     # arguments that looked right.
@@ -64,18 +61,23 @@ def test_refresh_access_token_persists_a_rotated_refresh_token(tmp_path, monkeyp
     responses.add(
         responses.POST,
         "https://www.strava.com/oauth/token",
-        json={"access_token": "new-access", "refresh_token": "rotated-refresh"},
+        json={
+            "access_token": "new-access",
+            "refresh_token": "rotated-refresh",
+            "expires_at": 1234567890,
+        },
         status=200,
     )
 
-    token = auth.refresh_access_token("cid", "csecret", "old-refresh")
+    tokens = auth.refresh_strava_tokens("cid", "csecret", "old-refresh")
+    auth.save_strava_tokens_to_env(tokens)
 
-    assert token == "new-access"
+    assert tokens.access_token == "new-access"
     assert "STRAVA_REFRESH_TOKEN='rotated-refresh'" in env_file.read_text()
 
 
 @responses.activate
-def test_refresh_access_token_skips_rewrite_when_refresh_token_is_unchanged(
+def test_refresh_strava_tokens_skips_rewrite_when_refresh_token_is_unchanged(
     tmp_path, monkeypatch
 ):
     env_file = tmp_path / ".env"
@@ -85,11 +87,30 @@ def test_refresh_access_token_skips_rewrite_when_refresh_token_is_unchanged(
     responses.add(
         responses.POST,
         "https://www.strava.com/oauth/token",
-        json={"access_token": "new-access", "refresh_token": "same-refresh"},
+        json={
+            "access_token": "new-access",
+            "refresh_token": "same-refresh",
+            "expires_at": 1234567890,
+        },
         status=200,
     )
 
-    auth.refresh_access_token("cid", "csecret", "same-refresh")
+    tokens = auth.refresh_strava_tokens("cid", "csecret", "same-refresh")
+    auth.save_strava_tokens_to_env(tokens)
 
     # No rewrite at all — not even a reformatted but value-equal line.
     assert env_file.read_text() == before
+
+
+@responses.activate
+def test_refresh_keeps_the_sent_refresh_token_when_strava_omits_one():
+    responses.add(
+        responses.POST,
+        "https://www.strava.com/oauth/token",
+        json={"access_token": "new-access", "expires_at": 1234567890},
+        status=200,
+    )
+
+    tokens = auth.refresh_strava_tokens("cid", "csecret", "sent-refresh")
+
+    assert tokens.refresh_token == "sent-refresh"

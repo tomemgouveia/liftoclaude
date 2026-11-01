@@ -26,7 +26,7 @@ RECORD_TEXT = (
 def test_get_workout_hits_the_history_url_with_a_bearer_header():
     responses.add(
         responses.GET,
-        "https://www.liftosaur.com/api/v1/history/",
+        "https://www.liftosaur.com/api/v1/history",
         json={
             "data": {"records": [{"id": 12345, "text": RECORD_TEXT}], "hasMore": False}
         },
@@ -37,7 +37,7 @@ def test_get_workout_hits_the_history_url_with_a_bearer_header():
 
     assert len(responses.calls) == 1
     sent = responses.calls[0].request
-    assert sent.url == "https://www.liftosaur.com/api/v1/history/"
+    assert sent.url == "https://www.liftosaur.com/api/v1/history"
     assert sent.headers["Authorization"] == "Bearer test-api-key"
 
 
@@ -45,7 +45,7 @@ def test_get_workout_hits_the_history_url_with_a_bearer_header():
 def test_get_workout_parses_the_response_text_field():
     responses.add(
         responses.GET,
-        "https://www.liftosaur.com/api/v1/history/",
+        "https://www.liftosaur.com/api/v1/history",
         json={
             "data": {"records": [{"id": 12345, "text": RECORD_TEXT}], "hasMore": False}
         },
@@ -142,7 +142,7 @@ def test_get_workout_matches_string_id_to_numeric_record_id(monkeypatch):
     monkeypatch.setenv("LIFTOSAUR_API_KEY", "test-api-key")
     responses.add(
         responses.GET,
-        "https://www.liftosaur.com/api/v1/history/",
+        "https://www.liftosaur.com/api/v1/history",
         json={
             "data": {
                 "records": [{"id": 1793000205964, "text": RECORD_TEXT}],
@@ -162,18 +162,6 @@ def test_get_workout_matches_string_id_to_numeric_record_id(monkeypatch):
 def test_get_workout_searches_later_pages_when_id_is_not_on_first_page():
     responses.add(
         responses.GET,
-        "https://www.liftosaur.com/api/v1/history/",
-        json={
-            "data": {
-                "records": [{"id": 1, "text": RECORD_TEXT}],
-                "hasMore": True,
-                "nextCursor": 2,
-            }
-        },
-        status=200,
-    )
-    responses.add(
-        responses.GET,
         "https://www.liftosaur.com/api/v1/history",
         json={
             "data": {
@@ -199,7 +187,7 @@ def test_get_workout_searches_later_pages_when_id_is_not_on_first_page():
     entry = LiftosaurApiSource("test-api-key").get_workout("1793000205964")
 
     assert entry.id == "1793000205964"
-    assert len(responses.calls) == 3
+    assert len(responses.calls) == 2
 
 
 @responses.activate
@@ -207,16 +195,44 @@ def test_get_workout_raises_clear_error_when_id_is_not_in_history(monkeypatch):
     monkeypatch.setenv("LIFTOSAUR_API_KEY", "test-api-key")
     responses.add(
         responses.GET,
-        "https://www.liftosaur.com/api/v1/history/",
-        json={"data": {"records": [], "hasMore": False}},
-        status=200,
-    )
-    responses.add(
-        responses.GET,
         "https://www.liftosaur.com/api/v1/history",
         json={"data": {"records": [], "hasMore": False}},
         status=200,
     )
-
     with pytest.raises(LookupError, match="Workout 'missing' was not found"):
         LiftosaurApiSource("test-api-key").get_workout("missing")
+
+
+@responses.activate
+def test_get_workout_stops_paging_once_the_record_is_found():
+    responses.add(
+        responses.GET,
+        "https://www.liftosaur.com/api/v1/history",
+        json={
+            "data": {
+                "records": [{"id": 7, "text": RECORD_TEXT}],
+                "hasMore": True,
+                "nextCursor": 2,
+            }
+        },
+        status=200,
+    )
+
+    LiftosaurApiSource("test-api-key").get_workout("7")
+
+    assert len(responses.calls) == 1
+
+
+@responses.activate
+@pytest.mark.parametrize(
+    ("status", "expected"), [(200, True), (401, False), (403, False)]
+)
+def test_health_check_only_reports_false_for_rejected_keys(status, expected):
+    responses.add(
+        responses.GET,
+        "https://www.liftosaur.com/api/v1/history",
+        json={"data": {"records": [], "hasMore": False}},
+        status=status,
+    )
+
+    assert LiftosaurApiSource("test-api-key").health_check() is expected

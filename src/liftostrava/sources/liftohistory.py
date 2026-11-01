@@ -72,6 +72,8 @@ def _parse_set_groups(segment: str) -> list[Set]:
 
 def parse_liftohistory(text: str) -> Workout:
     lines = text.strip().splitlines()
+    if not lines:
+        raise ValueError("Empty Liftohistory record")
 
     # Skip any leading "// note" or blank lines before the header.
     idx = 0
@@ -79,6 +81,8 @@ def parse_liftohistory(text: str) -> Workout:
         not lines[idx].strip() or lines[idx].strip().startswith("//")
     ):
         idx += 1
+    if idx >= len(lines):
+        raise ValueError("Liftohistory record has no header line")
     header_line = lines[idx].strip()
     body_lines = lines[idx + 1 :]
 
@@ -119,11 +123,12 @@ def parse_liftohistory(text: str) -> Workout:
             ),
             None,
         )
+        # An unparseable set group raises rather than being dropped: a
+        # silently empty exercise would upload as if it was never done.
         try:
             sets = _parse_set_groups(completed_segment) if completed_segment else []
         except ValueError as e:
-            print(f"Error parsing exercise '{exercise_name}': {e}")
-            sets = []
+            raise ValueError(f"Error parsing exercise {exercise_name!r}: {e}") from e
         exercises.append(Exercise(name=exercise_name, sets=sets))
 
     return Workout(

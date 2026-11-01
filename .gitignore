@@ -10,3 +10,7 @@ python_modules/
 pylock.toml
 *sandbox*.*
 .wrangler/
+private/
+secrets.env
+web/node_modules/
+web/dist/
