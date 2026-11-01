@@ -4,21 +4,16 @@ import json
 import logging
 import re
 import time
-from dataclasses import dataclass
 from typing import Any
 
 from pyodide.ffi import JsException
 
+from cloudflare.models import AccessIDKey
+
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
-class AccessPrincipal:
-    email: str | None = None
-    service_token_id: str | None = None
-
-
-def principal_from_claims(claims: dict[str, Any]) -> AccessPrincipal | None:
+def get_id_key_from_claims(claims: dict[str, Any]) -> AccessIDKey | None:
     common_name = claims.get("common_name")
     if common_name is not None:
         if (
@@ -26,13 +21,13 @@ def principal_from_claims(claims: dict[str, Any]) -> AccessPrincipal | None:
             and common_name.endswith(".access")
             and claims.get("sub") == ""
         ):
-            return AccessPrincipal(service_token_id=common_name)
+            return AccessIDKey(service_token_id=common_name)
         logger.warning("Unsupported Cloudflare Access token identity")
         return None
 
     email = claims.get("email")
     if isinstance(email, str) and email.strip():
-        return AccessPrincipal(email=email.strip().lower())
+        return AccessIDKey(email=email.strip().lower())
 
     logger.warning("Cloudflare Access token has no supported identity")
     return None
@@ -42,7 +37,7 @@ async def process_jwt(
     assertion: str,
     team_domain: str,
     expected_audience: str,
-) -> AccessPrincipal | None:
+) -> AccessIDKey | None:
     team_domain = team_domain.strip().rstrip("/")
     if team_domain.startswith("https://"):
         issuer = team_domain
@@ -162,7 +157,7 @@ async def process_jwt(
         logger.warning("Cloudflare Access JWT is expired or not yet valid")
         return None
 
-    return principal_from_claims(claims)
+    return get_id_key_from_claims(claims)
 
 
 def _decode_jwt_segment(segment: str) -> bytes:

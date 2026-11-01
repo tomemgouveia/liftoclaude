@@ -25,11 +25,12 @@ CREATE TABLE credentials (
 );
 """
 insert_tome_in_users_sql = """
-INSERT INTO users (id, email, name)
+INSERT INTO users (id, email, name, access_service_token_id)
 VALUES (
   '687a7c8d-b936-48ee-a2cb-8a23dbadcee6',
   'tome.pmg+cloudflare@gmail.com',
-  'Tomé Magalhães Gouveia'
+  'Tomé Magalhães Gouveia',
+  '7b2f7f62a21cb7c63c25a2312ed3e2bf.access'
 )
 RETURNING id, email, name;
 """

@@ -3,14 +3,22 @@ cli/auth.py) and the per-run access-token refresh (see cli/sync.py and
 strava/client.py)."""
 
 import re
+from dataclasses import dataclass
 
 import requests
-from dotenv import set_key
+from dotenv import get_key, set_key
 
 from liftostrava.config import ENV_PATH
 
 SCOPE = "activity:write,activity:read_all"
 REDIRECT_URI = "http://localhost/exchange_token"
+
+
+@dataclass
+class StravaTokens:
+    access_token: str
+    refresh_token: str
+    expires_at: int
 
 
 def build_authorize_url(client_id: str) -> str:
@@ -50,7 +58,9 @@ def exchange_authorization_code(client_id: str, client_secret: str, code: str) -
     return tokens
 
 
-def refresh_access_token(client_id: str, client_secret: str, refresh_token: str) -> str:
+def refresh_strava_tokens(
+    client_id: str, client_secret: str, refresh_token: str
+) -> StravaTokens:
     resp = requests.post(
         "https://www.strava.com/oauth/token",
         data={
@@ -62,7 +72,19 @@ def refresh_access_token(client_id: str, client_secret: str, refresh_token: str)
     )
     resp.raise_for_status()
     data = resp.json()
+
+    return StravaTokens(
+        access_token=data.get("access_token"),
+        refresh_token=data.get(
+            "refresh_token", get_key(ENV_PATH, "STRAVA_REFRESH_TOKEN")
+        ),
+        expires_at=data.get("expires_at"),
+    )
+
+
+def save_strava_tokens_to_env(tokens: StravaTokens) -> None:
     # Strava rotates refresh tokens on some accounts; persist the latest.
-    if data.get("refresh_token") and data["refresh_token"] != refresh_token:
-        set_key(ENV_PATH, "STRAVA_REFRESH_TOKEN", data["refresh_token"])
-    return data["access_token"]
+    if tokens.refresh_token != get_key(ENV_PATH, "STRAVA_REFRESH_TOKEN"):
+        set_key(ENV_PATH, "STRAVA_REFRESH_TOKEN", tokens.refresh_token)
+        set_key(ENV_PATH, "STRAVA_ACCESS_TOKEN", tokens.access_token)
+        set_key(ENV_PATH, "STRAVA_EXPIRES_AT", str(tokens.expires_at))

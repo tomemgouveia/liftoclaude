@@ -52,7 +52,7 @@ from dotenv import load_dotenv
 from liftostrava.config import ENV_PATH
 from liftostrava.sources.api import LiftosaurApiSource
 from liftostrava.sources.mcp_export import McpExportSource
-from liftostrava.strava.auth import refresh_access_token
+from liftostrava.strava.auth import refresh_strava_tokens, save_strava_tokens_to_env
 from liftostrava.strava.client import (
     poll_upload,
     set_muted,
@@ -140,19 +140,20 @@ def main():
     assert refresh_token is not None
 
     print("Refreshing access token...")
-    access_token = refresh_access_token(client_id, client_secret, refresh_token)
+    strava_tokens = refresh_strava_tokens(client_id, client_secret, refresh_token)
+    save_strava_tokens_to_env(strava_tokens)
 
     print("Uploading workout...")
-    upload = upload_activity(access_token, workout, args.sport_type)
+    upload = upload_activity(strava_tokens.access_token, workout, args.sport_type)
     upload_id = upload["id"]
 
     print(f"Upload accepted (id={upload_id}), waiting for Strava to process it...")
-    status = poll_upload(access_token, upload_id)
+    status = poll_upload(strava_tokens.access_token, upload_id)
     activity_id = status["activity_id"]
 
     if not args.public:
         print("Muting activity from home feed (hide_from_home=true)...")
-        set_muted(access_token, activity_id, True)
+        set_muted(strava_tokens.access_token, activity_id, True)
 
     print(f"\nDone: https://www.strava.com/activities/{activity_id}")
     if not args.public:
