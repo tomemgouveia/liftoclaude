@@ -140,7 +140,7 @@ class Default(WorkerEntrypoint):
             """
         if id_key.service_token_id is not None:
             query = (
-                await self.env.liftostrava_users_db.prepare(
+                await self.env.liftosaur_strava_sync_users.prepare(
                     sql.format("u.access_service_token_id = ?")
                 )
                 .bind(id_key.service_token_id)
@@ -148,7 +148,7 @@ class Default(WorkerEntrypoint):
             )
         elif id_key.email is not None:
             query = (
-                await self.env.liftostrava_users_db.prepare(
+                await self.env.liftosaur_strava_sync_users.prepare(
                     sql.format("lower(u.email) = ?")
                 )
                 .bind(id_key.email)
@@ -185,7 +185,7 @@ class Default(WorkerEntrypoint):
         user = await self.get_user(id_key)
         if user is None:
             await (
-                self.env.liftostrava_users_db.prepare(
+                self.env.liftosaur_strava_sync_users.prepare(
                     "INSERT OR IGNORE INTO users (id, email, name) VALUES (?, ?, ?)"
                 )
                 .bind(str(uuid.uuid4()), email, email.split("@")[0])
@@ -267,7 +267,7 @@ class Default(WorkerEntrypoint):
         ):
             return result("bad_key", 422)
 
-        db = self.env.liftostrava_users_db
+        db = self.env.liftosaur_strava_sync_users
         await (
             db.prepare("UPDATE users SET timezone = ? WHERE id = ?")
             .bind(timezone, user.user_id)
@@ -478,7 +478,7 @@ class Default(WorkerEntrypoint):
             """
         key = self.aes_key()
         await (
-            self.env.liftostrava_users_db.prepare(sql)
+            self.env.liftosaur_strava_sync_users.prepare(sql)
             .bind(
                 user_id,
                 await encrypt(tokens.access_token, key),

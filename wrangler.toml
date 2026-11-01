@@ -34,9 +34,9 @@ persist = true
 enabled = true
 
 [[d1_databases]]
-binding = "liftostrava_users_db"
+binding = "liftosaur_strava_sync_users"
 database_name = "liftosaur-strava-sync-users"
-database_id = "acce9e70-4874-41bb-bf9c-548c3876ef0c"
+database_id = "88b7942e-5e55-46ea-9ca3-9a4b130ad215"
 
 [vars]
 CF_ACCESS_TEAM_DOMAIN = "https://lively-river-44e6.cloudflareaccess.com"
@@ -53,7 +53,7 @@ binding = "STRAVA_TOKEN_STORE"
 id = "6fad49e40aaa4209acd8423973969a2b"
 
 [[previews.d1_databases]]
-binding = "liftostrava_users_db"
+binding = "liftosaur_strava_sync_users"
 database_name = "liftosaur-strava-sync-preview"
 database_id = "5c172b23-2571-4b43-86c6-84280c6388b3"
 
