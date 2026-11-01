@@ -2,7 +2,6 @@ import asyncio
 import logging
 import time
 import uuid
-from datetime import datetime
 from typing import Any, cast
 from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -20,6 +19,7 @@ from cloudflare.credential_crypto import (
 )
 from cloudflare.history_range import HistoryRangeError, parse_history_range
 from cloudflare.oauth_state import sign_state, verify_state
+from cloudflare.workout_json import workout_json
 from liftostrava.sources.api import LiftosaurApiSource
 from liftostrava.strava.auth import (
     StravaTokens,
@@ -443,20 +443,14 @@ class Default(WorkerEntrypoint):
             return Response.from_json(
                 {"error": "Could not reach Liftosaur"}, status=502
             )
+        # The legacy root path keeps its original compact shape for
+        # Shortcuts; /api/workouts is the full shape unless ?brief=1.
+        query = parse_qs(urlparse(request.url).query)
+        brief = urlparse(request.url).path.rstrip("/") == "" or query.get("brief") == [
+            "1"
+        ]
         serialised_workout_history = [
-            {
-                "id": workout.id,
-                "name": workout.workout.name,
-                "date": datetime.fromisoformat(workout.workout.start_time).strftime(
-                    "%Y-%m-%d"
-                ),
-                "start_time": workout.workout.start_time,
-                "duration_s": workout.workout.elapsed_time,
-                "exercises": [
-                    {"name": e.name, "sets": len(e.sets)}
-                    for e in workout.workout.exercises
-                ],
-            }
+            workout_json(workout, brief)
             for workout in sorted(
                 workout_history, key=lambda w: w.workout.start_time, reverse=True
             )

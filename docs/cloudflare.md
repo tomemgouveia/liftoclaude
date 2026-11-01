@@ -67,6 +67,8 @@ The Worker's JSON API:
   `/connect/strava/callback` remain server-side OAuth redirects.
 
 `GET /` (without `Accept: text/html`) and `POST /` still work for Shortcuts.
+`GET /` returns the compact `{id, name, date}` list; add `?brief=1` to
+`/api/workouts` for the same compact shape with a date range.
 
 ## Access authentication for users and Shortcuts
 
