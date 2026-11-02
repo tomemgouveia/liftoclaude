@@ -22,3 +22,5 @@ fallback otherwise — plus the privacy and credentials caveats.
 - Style: dataclasses for data, pure functions for transformations, small
   classes for API clients, `Protocol`s only where there are two real
   implementations.
+- Tests mirror the source tree: `tests/liftostrava/<pkg>/test_<module>.py`
+  and `tests/liftostrava_worker/...`.
