@@ -3,10 +3,10 @@ outside the Workers runtime."""
 
 from datetime import datetime
 
-from liftostrava.sources.base import WorkoutEntry
+from liftostrava.domain import WorkoutRecord
 
 
-def workout_json(entry: WorkoutEntry, brief: bool) -> dict:
+def workout_json(entry: WorkoutRecord, brief: bool) -> dict:
     """`brief` is the compact id/name/date shape Shortcuts pick from; the
     full shape is what the web app renders."""
     workout = entry.workout

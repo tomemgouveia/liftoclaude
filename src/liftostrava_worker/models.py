@@ -1,7 +1,6 @@
-import time
 from dataclasses import dataclass
 
-STRAVA_REFRESH_THRESHOLD_SECONDS = 3600
+from liftostrava.tokens import StravaTokens
 
 
 @dataclass(frozen=True)
@@ -18,7 +17,7 @@ class User:
     has_credentials: bool
     liftosaur_api_key: str | None = None
     # IANA name (e.g. "Europe/London") used for Strava's local start time;
-    # None falls back to payload.ATHLETE_TIMEZONE.
+    # None falls back to service.DEFAULT_TIMEZONE.
     timezone: str | None = None
 
     # the strava access token allows the worker to make strava API calls
@@ -28,9 +27,11 @@ class User:
     strava_refresh_token: str | None = None
     strava_expires_at: int | None = None
 
-    def is_strava_access_token_valid(self) -> bool:
-        if self.strava_access_token and self.strava_expires_at:
-            return (
-                self.strava_expires_at > time.time() + STRAVA_REFRESH_THRESHOLD_SECONDS
-            )
-        return False
+    def strava_tokens(self) -> StravaTokens | None:
+        if not self.strava_refresh_token:
+            return None
+        return StravaTokens(
+            access_token=self.strava_access_token or "",
+            refresh_token=self.strava_refresh_token,
+            expires_at=self.strava_expires_at or 0,
+        )

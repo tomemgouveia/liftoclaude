@@ -1,4 +1,4 @@
-from cloudflare.process_jwt import AccessIDKey, get_id_key_from_claims
+from liftostrava_worker.access_jwt import AccessIDKey, get_id_key_from_claims
 
 
 def test_get_id_key_from_claims_normalizes_human_email():
