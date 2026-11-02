@@ -21,4 +21,4 @@ fallback otherwise — plus the privacy and credentials caveats.
   `src/cloudflare_worker.py` is the `wrangler.toml` entry shim
 - Style: dataclasses for data, pure functions for transformations, small
   classes for API clients, `Protocol`s only where there are two real
-  implementations. See `docs/refactor-proposal.md` for the rationale.
+  implementations.
