@@ -37,7 +37,7 @@ reachable.
 
 Without an API key, Claude Code can use the Liftosaur MCP tools to find and
 retrieve a workout, then write a JSON file for the CLI. The repository's
-[Claude instructions](../CLAUDE.md) describe this flow, including how to
+[sync-to-strava skill](../.claude/skills/sync-to-strava/SKILL.md) describe this flow, including how to
 include completed sets and avoid warmup or target sets.
 
 Keep temporary workout files in `workouts/`, which is gitignored. Use a
@@ -67,7 +67,7 @@ skip muting an activity from feeds; this does not change its visibility.
   exercises may appear as “Unknown,” though their sets, reps, and weights are
   still uploaded. See
   [Strava's supported exercises](https://developers.strava.com/docs/uploads/)
-  and the mapping in `src/liftostrava/strava/exercise_map.py`.
+  and the mapping in `src/liftostrava/strava/payload.py`.
 - Strava's strength-activity upload format is not a published schema and may
   change.
 - Strava's muscle-map visualization may not appear reliably for API-uploaded

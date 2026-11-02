@@ -28,4 +28,4 @@ uv run sync-to-strava tests/fixtures/sample_workout.json --dry-run
 - [CLI, Claude/MCP workflows, and privacy](docs/usage.md)
 - [Cloudflare Worker](docs/cloudflare.md)
 
-For Claude Code workout-sync behavior, see [CLAUDE.md](CLAUDE.md).
+For Claude Code workout-sync behavior, see the [sync-to-strava skill](.claude/skills/sync-to-strava/SKILL.md) (and [CLAUDE.md](CLAUDE.md) for the code layout).

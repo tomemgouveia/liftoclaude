@@ -17,24 +17,20 @@ import sys
 import requests
 from dotenv import load_dotenv
 
-from liftostrava.config import ENV_PATH
-from liftostrava.strava.auth import (
-    build_authorize_url,
-    exchange_authorization_code,
-    extract_code,
-    save_refresh_token_to_env,
-)
+from liftostrava.cli import config
+from liftostrava.cli.env_store import save_refresh_token
+from liftostrava.strava.oauth import StravaOAuth, extract_code
 
 
 def main():
-    if not os.path.exists(ENV_PATH):
+    if not os.path.exists(config.ENV_PATH):
         print(
             "No .env found. Copy .env.example to .env and fill in "
             "STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET first."
         )
         sys.exit(1)
 
-    load_dotenv(ENV_PATH)
+    load_dotenv(config.ENV_PATH)
     client_id = os.getenv("STRAVA_CLIENT_ID")
     client_secret = os.getenv("STRAVA_CLIENT_SECRET")
 
@@ -42,8 +38,10 @@ def main():
         print("STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET are missing from .env.")
         sys.exit(1)
 
+    oauth = StravaOAuth(client_id, client_secret)
+
     print("1. Open this URL in a browser and authorize the app:\n")
-    print(f"   {build_authorize_url(client_id)}\n")
+    print(f"   {oauth.authorize_url()}\n")
     print(
         "2. Strava will redirect to a localhost URL that won't load (that's expected)."
     )
@@ -56,12 +54,12 @@ def main():
     code = extract_code(raw)
 
     try:
-        tokens = exchange_authorization_code(client_id, client_secret, code)
+        authorization = oauth.exchange_code(code)
     except requests.HTTPError as e:
         resp = e.response
         # .response is typed Optional since HTTPError can in principle be
         # raised without one, but raise_for_status() (inside
-        # exchange_authorization_code) always attaches the response it saw.
+        # exchange_code) always attaches the response it saw.
         assert resp is not None
         print(f"\nStrava rejected the token exchange (HTTP {resp.status_code}):")
         print(f"   {resp.text}\n")
@@ -82,8 +80,8 @@ def main():
         )
         sys.exit(1)
 
-    save_refresh_token_to_env(tokens["refresh_token"])
-    athlete = tokens.get("athlete", {})
+    save_refresh_token(config.ENV_PATH, authorization.tokens.refresh_token)
+    athlete = authorization.athlete
     print(
         f"\nAuthorized as {athlete.get('firstname', '')} {athlete.get('lastname', '')}."
     )

@@ -11,58 +11,42 @@ Usage:
 
 Two input routes:
 
-  - A JSON file (see liftostrava.sources.mcp_export and the sample at
-    tests/fixtures/sample_workout.json for its shape) — the
-    one CLAUDE.md in the repo root instructs Claude to write after
-    pulling a record from the Liftosaur MCP server, for when no
-    LIFTOSAUR_API_KEY is configured.
+  - A JSON file (see liftostrava.liftosaur.mcp_export and the sample at
+    tests/fixtures/sample_workout.json for its shape) — the one the
+    sync-to-strava skill has Claude write after pulling a record from the
+    Liftosaur MCP server, for when no LIFTOSAUR_API_KEY is configured.
   - `--from-api RECORD_ID`, which fetches and parses the record directly
-    from Liftosaur's REST API (see liftostrava.sources.api) — requires
-    Premium and LIFTOSAUR_API_KEY in .env. No JSON file involved.
+    from Liftosaur's REST API (see liftostrava.liftosaur.client) —
+    requires Premium and LIFTOSAUR_API_KEY in .env. No JSON file involved.
 
---- Important caveats (read before relying on this) ---
-
-1. Strava does publish a "Supported Exercises" list of accepted
-   `exercise_type` values by category, at
-   developers.strava.com/docs/uploads/ — that's the source for entries
-   in EXERCISE_TYPE_MAP (liftostrava/strava/exercise_map.py) marked
-   "docs" below. Check that live page before guessing at a new mapping.
-   It's still not a formal machine-readable schema for the upload JSON
-   format itself. Unrecognised exercise names commonly show up as
-   "Unknown" in the app rather than causing an error.
-
-2. Privacy: the Strava API has not supported setting an activity's
-   visibility (Everyone / Followers / Only You) since ~2018 — this is
-   a known, long-standing API limitation, not something this script
-   can work around. The only related control the API exposes is
-   `hide_from_home`, which mutes an activity from feeds but does NOT
-   make it "Only You" private. This script sets hide_from_home=True
-   by default (pass --public to skip that). For activities to
-   actually default to "Only You", set that as your account-wide
-   default in the Strava app: Settings > Privacy Controls > Activities.
+Privacy: the Strava API cannot set an activity's visibility (Everyone /
+Followers / Only You). By default this mutes the activity from feeds
+(`hide_from_home`), which is NOT the same as "Only You"; pass --public to
+skip even that. For a true default, set it in the Strava app (Settings >
+Privacy Controls > Activities). Strava's exercise-name mapping caveats
+are documented in liftostrava/strava/payload.py; see docs/usage.md for
+the rest.
 """
 
 import argparse
+import asyncio
 import json
 import os
 import sys
 
 from dotenv import load_dotenv
 
-from liftostrava.config import ENV_PATH
-from liftostrava.sources.api import LiftosaurApiSource
-from liftostrava.sources.mcp_export import McpExportSource
-from liftostrava.strava.auth import refresh_strava_tokens, save_strava_tokens_to_env
-from liftostrava.strava.client import (
-    poll_upload,
-    set_muted,
-    strava_form_fields,
-    upload_activity,
-)
-from liftostrava.strava.payload import build_strava_payload
+from liftostrava.cli import config
+from liftostrava.cli.env_store import EnvFileTokenStore
+from liftostrava.domain import Workout
+from liftostrava.errors import MissingCredentials
+from liftostrava.liftosaur.client import LiftosaurClient
+from liftostrava.liftosaur.mcp_export import load_workout
+from liftostrava.service import SyncService, preview_upload
+from liftostrava.strava.oauth import StravaOAuth
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -73,11 +57,6 @@ def main():
         help="Fetch and parse the workout directly from Liftosaur's REST "
         "API instead of a JSON file (requires Premium and "
         "LIFTOSAUR_API_KEY in .env). Alternative to workout_file.",
-    )
-    parser.add_argument(
-        "--sport-type",
-        default="WeightTraining",
-        help="Strava sport_type (default: WeightTraining)",
     )
     parser.add_argument(
         "--public",
@@ -92,71 +71,62 @@ def main():
         help="Build and print the payload without "
         "calling Strava or requiring credentials.",
     )
-    args = parser.parse_args()
+    return parser
 
+
+def load_input(args: argparse.Namespace) -> Workout:
+    if args.from_api:
+        client = LiftosaurClient(os.getenv("LIFTOSAUR_API_KEY", ""))
+        return client.get_workout(args.from_api)
+    return load_workout(args.workout_file)
+
+
+def strava_oauth_from_env() -> StravaOAuth:
+    client_id = os.getenv("STRAVA_CLIENT_ID")
+    client_secret = os.getenv("STRAVA_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        raise MissingCredentials(
+            "Missing Strava credentials in .env. Run strava-auth first."
+        )
+    return StravaOAuth(client_id, client_secret)
+
+
+def main() -> None:
+    parser = build_parser()
+    args = parser.parse_args()
     if bool(args.workout_file) == bool(args.from_api):
         parser.error("Provide exactly one of workout_file or --from-api")
 
     # Needed before loading the workout: --from-api reads LIFTOSAUR_API_KEY
     # from .env at load time, dry-run or not. Harmless no-op for the
     # workout_file route, which doesn't consume any env vars.
-    load_dotenv(ENV_PATH)
+    load_dotenv(config.ENV_PATH)
+    hide_from_home = not args.public
 
-    if args.from_api:
-        workout = (
-            LiftosaurApiSource(os.getenv("LIFTOSAUR_API_KEY", ""))
-            .get_workout(args.from_api)
-            .workout
-        )
-    else:
-        workout = McpExportSource(args.workout_file).load()
+    try:
+        workout = load_input(args)
 
-    if args.dry_run:
-        print("Would upload the following to Strava (--dry-run, nothing sent):\n")
-        print(
-            json.dumps(
-                {
-                    "form_fields": strava_form_fields(workout, args.sport_type),
-                    "file_content": build_strava_payload(workout),
-                    "hide_from_home_after_upload": not args.public,
-                },
-                indent=2,
+        if args.dry_run:
+            print("Would upload the following to Strava (--dry-run, nothing sent):\n")
+            print(
+                json.dumps(
+                    preview_upload(workout, hide_from_home=hide_from_home), indent=2
+                )
             )
+            return
+
+        service = SyncService(
+            strava_oauth_from_env(),
+            EnvFileTokenStore(config.ENV_PATH),
+            progress=print,
         )
-        return
-
-    client_id = os.getenv("STRAVA_CLIENT_ID")
-    client_secret = os.getenv("STRAVA_CLIENT_SECRET")
-    refresh_token = os.getenv("STRAVA_REFRESH_TOKEN")
-
-    if not all([client_id, client_secret, refresh_token]):
-        print("Missing Strava credentials in .env. Run strava-auth first.")
+        result = asyncio.run(service.sync(workout, hide_from_home))
+    except MissingCredentials as e:
+        print(e)
         sys.exit(1)
-    # The all([...]) check above guarantees none of these are None, but the
-    # type checker can't narrow through a dynamically-built list — spell it
-    # out so the str | None from os.getenv() doesn't propagate further.
-    assert client_id is not None
-    assert client_secret is not None
-    assert refresh_token is not None
 
-    print("Refreshing access token...")
-    strava_tokens = refresh_strava_tokens(client_id, client_secret, refresh_token)
-    save_strava_tokens_to_env(strava_tokens)
-
-    print("Uploading workout...")
-    upload = upload_activity(strava_tokens.access_token, workout, args.sport_type)
-    upload_id = upload["id"]
-
-    print(f"Upload accepted (id={upload_id}), waiting for Strava to process it...")
-    status = poll_upload(strava_tokens.access_token, upload_id)
-    activity_id = status["activity_id"]
-
-    if not args.public:
-        print("Muting activity from home feed (hide_from_home=true)...")
-        set_muted(strava_tokens.access_token, activity_id, True)
-
-    print(f"\nDone: https://www.strava.com/activities/{activity_id}")
-    if not args.public:
+    print(f"\nDone: {result.url}")
+    if result.hidden_from_home:
         print(
             "Note: hide_from_home only mutes it from feeds — it is not "
             "the same as 'Only You' visibility. Set your account's "

@@ -19,6 +19,7 @@ RUN npm install --no-save --no-package-lock wrangler@latest
 
 COPY pyproject.toml uv.lock README.md ./
 COPY src/liftostrava ./src/liftostrava
+COPY src/liftostrava_worker ./src/liftostrava_worker
 COPY src/cloudflare_worker.py ./src/cloudflare_worker.py
 COPY wrangler.toml ./
 

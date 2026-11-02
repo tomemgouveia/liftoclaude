@@ -32,6 +32,8 @@ packages = ["src/liftostrava"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Mirrored test layout repeats basenames (test_client.py, test_oauth.py, ...).
+addopts = ["--import-mode=importlib"]
 
 [tool.ruff.lint]
 ignore = ["BLE001", "DTZ002"]
