@@ -90,6 +90,18 @@ class StravaClient:
             f"still complete."
         )
 
+    def get_activity(self, activity_id: int) -> dict:
+        """Fetch an activity as Strava's JSON (GET /activities/{id}).
+        Needs the `activity:read_all` scope to see activities that are
+        private or hidden from the home feed."""
+        resp = requests.get(
+            f"{API_BASE}/activities/{activity_id}",
+            headers=self._headers(),
+            timeout=REQUEST_TIMEOUT_S,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
     def set_hide_from_home(self, activity_id: int, hidden: bool) -> None:
         resp = requests.put(
             f"{API_BASE}/activities/{activity_id}",

@@ -14,6 +14,7 @@ easy to lose in a refactor:
 import asyncio
 
 import pytest
+import requests
 import responses
 
 from liftostrava.errors import StravaUploadError
@@ -127,3 +128,31 @@ def test_set_hide_from_home_sends_a_lowercase_string_value():
     client.set_hide_from_home(123, True)
 
     assert responses.calls[0].request.body == "hide_from_home=true"
+
+
+@responses.activate
+def test_get_activity_returns_the_activity_json():
+    responses.add(
+        responses.GET,
+        "https://www.strava.com/api/v3/activities/123",
+        json={"id": 123, "name": "Lower Body Workout"},
+        status=200,
+    )
+
+    activity = client.get_activity(123)
+
+    assert activity == {"id": 123, "name": "Lower Body Workout"}
+    assert responses.calls[0].request.headers["Authorization"] == "Bearer token"
+
+
+@responses.activate
+def test_get_activity_raises_on_a_missing_activity():
+    responses.add(
+        responses.GET,
+        "https://www.strava.com/api/v3/activities/404",
+        json={"message": "Resource Not Found"},
+        status=404,
+    )
+
+    with pytest.raises(requests.HTTPError):
+        client.get_activity(404)
