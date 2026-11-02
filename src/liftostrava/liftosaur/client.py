@@ -1,11 +1,11 @@
-"""A WorkoutSource backed directly by Liftosaur's REST API — no MCP tool,
-no agent-transcribed JSON file, no `workouts/` scratch file. Requires
-Liftosaur Premium and an API key generated at Settings -> API Keys,
-supplied via the LIFTOSAUR_API_KEY environment variable.
+"""Client for Liftosaur's REST API — an alternative to the MCP + JSON-file
+route (liftosaur/mcp_export.py) that needs no agent-transcribed file.
+Requires Liftosaur Premium and an API key generated at Settings -> API
+Keys, supplied via the LIFTOSAUR_API_KEY environment variable.
 
-`GET /api/v1/history/:id` returns the workout as a "text" field containing
+`GET /api/v1/history` returns each workout as a "text" field containing
 the exact same Liftohistory text format the MCP `get_history`/
-`get_history_record` tools return — see sources/liftohistory.py, the
+`get_history_record` tools return — see liftosaur/history_parser.py, the
 actual parser, which this module just feeds.
 
 There is no `GET /api/v1/history/:id` endpoint, so a single record is
@@ -20,18 +20,19 @@ from datetime import datetime
 
 import requests
 
-from liftostrava.sources.base import WorkoutEntry
-from liftostrava.sources.liftohistory import parse_liftohistory
+from liftostrava.domain import Workout, WorkoutRecord
+from liftostrava.errors import MissingCredentials
+from liftostrava.liftosaur.history_parser import parse_liftohistory
 
 API_BASE = "https://www.liftosaur.com/api/v1"
 REQUEST_TIMEOUT_S = 30
 
 
-class LiftosaurApiSource:
+class LiftosaurClient:
     def __init__(self, api_key: str):
         self.api_key = api_key
         if not self.api_key:
-            raise RuntimeError(
+            raise MissingCredentials(
                 "LIFTOSAUR_API_KEY is not set. Generate one at "
                 "Settings -> API Keys in the Liftosaur app (requires "
                 "Premium), then add it to .env — see .env.example."
@@ -93,25 +94,22 @@ class LiftosaurApiSource:
         self,
         start_date: datetime | str | None = None,
         end_date: datetime | str | None = None,
-    ) -> list[WorkoutEntry]:
+    ) -> list[WorkoutRecord]:
         """List every workout in Liftosaur's history, newest first,
         optionally restricted to a `[start_date, end_date]` range (either
-        end may be omitted). Returns a list of WorkoutEntry objects.
+        end may be omitted). Returns a list of WorkoutRecord objects.
         """
         return [
-            WorkoutEntry(
+            WorkoutRecord(
                 id=str(record["id"]), workout=parse_liftohistory(record["text"])
             )
             for record in self._iter_records(start_date, end_date)
         ]
 
-    def get_workout(self, workout_id: str) -> WorkoutEntry:
+    def get_workout(self, workout_id: str) -> Workout:
         """The API has no get-by-id endpoint, so scan the (newest-first)
         history and stop at the match — only that record is parsed."""
         for record in self._iter_records():
             if str(record["id"]) == str(workout_id):
-                return WorkoutEntry(
-                    id=str(record["id"]),
-                    workout=parse_liftohistory(record["text"]),
-                )
+                return parse_liftohistory(record["text"])
         raise LookupError(f"Workout {workout_id!r} was not found in history")

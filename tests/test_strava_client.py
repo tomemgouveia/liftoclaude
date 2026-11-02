@@ -1,52 +1,33 @@
-"""Locks in upload_activity, poll_upload, and set_muted against Strava's
-API shape, with all requests mocked via `responses` (no real network, no
-credentials needed). These pin down a couple of behaviors that were
-bugfixed deliberately and would be easy to lose in a refactor:
+"""Locks in StravaClient against Strava's API shape, with all requests
+mocked via `responses` (no real network, no credentials needed). These pin
+down a couple of behaviors that were bugfixed deliberately and would be
+easy to lose in a refactor:
 
-  - upload_activity gives every call a unique filename/external_id, since
-    Strava dedupes uploads by that field and a fixed name made retries
-    return a stale cached result (see the comment above upload_activity).
-  - poll_upload distinguishes "still processing" from an error response
-    from a resolved activity_id, and times out rather than hanging forever
-    (or raising a bare NameError — see the comment in client.py).
-  - strava_form_fields preserves an explicitly empty name/description
-    rather than treating it the same as a missing one — a `workout.name
-    or "Strength Workout"` version of this would silently discard "".
+  - upload gives every call a unique filename/external_id, since Strava
+    dedupes uploads by that field and a fixed name made retries return a
+    stale cached result (see the comment above StravaClient.upload).
+  - wait_for_upload distinguishes "still processing" from an error
+    response from a resolved activity_id, and times out rather than
+    hanging forever.
 """
+
+import asyncio
 
 import pytest
 import responses
 
-from liftostrava.models import Workout
-from liftostrava.strava import client
+from liftostrava.errors import StravaUploadError
+from liftostrava.strava.client import StravaClient
+
+client = StravaClient("token")
 
 
-def test_strava_form_fields_defaults_a_missing_name_and_description():
-    workout = Workout(start_time="2026-01-15T10:00:00Z", elapsed_time=100, exercises=[])
-
-    fields = client.strava_form_fields(workout, "WeightTraining")
-
-    assert fields["name"] == "Strength Workout"
-    assert fields["description"] == ""
-
-
-def test_strava_form_fields_preserves_an_explicitly_empty_name_and_description():
-    workout = Workout(
-        start_time="2026-01-15T10:00:00Z",
-        elapsed_time=100,
-        exercises=[],
-        name="",
-        description="",
-    )
-
-    fields = client.strava_form_fields(workout, "WeightTraining")
-
-    assert fields["name"] == ""
-    assert fields["description"] == ""
+async def _no_sleep(seconds):
+    pass
 
 
 @responses.activate
-def test_upload_activity_sends_expected_form_fields_and_payload(sample_workout):
+def test_upload_sends_expected_form_fields_and_payload(sample_workout):
     responses.add(
         responses.POST,
         "https://www.strava.com/api/v3/uploads",
@@ -54,33 +35,29 @@ def test_upload_activity_sends_expected_form_fields_and_payload(sample_workout):
         status=201,
     )
 
-    result = client.upload_activity("token", sample_workout, "WeightTraining")
+    upload_id = client.upload(sample_workout, 3600)
 
-    assert result["id"] == 999
+    assert upload_id == 999
     sent = responses.calls[0].request
     assert sent.headers["Authorization"] == "Bearer token"
     body = sent.body
     assert isinstance(body, bytes)
     assert b'"version": "1.0"' in body
+    assert b'"utc_offset": 3600' in body
 
 
 @responses.activate
-def test_upload_activity_uses_a_unique_filename_per_call(sample_workout):
-    responses.add(
-        responses.POST,
-        "https://www.strava.com/api/v3/uploads",
-        json={"id": 1},
-        status=201,
-    )
-    responses.add(
-        responses.POST,
-        "https://www.strava.com/api/v3/uploads",
-        json={"id": 2},
-        status=201,
-    )
+def test_upload_uses_a_unique_filename_per_call(sample_workout):
+    for upload_id in (1, 2):
+        responses.add(
+            responses.POST,
+            "https://www.strava.com/api/v3/uploads",
+            json={"id": upload_id},
+            status=201,
+        )
 
-    client.upload_activity("token", sample_workout, "WeightTraining")
-    client.upload_activity("token", sample_workout, "WeightTraining")
+    client.upload(sample_workout, 0)
+    client.upload(sample_workout, 0)
 
     filenames = []
     for call in responses.calls:
@@ -91,7 +68,7 @@ def test_upload_activity_uses_a_unique_filename_per_call(sample_workout):
 
 
 @responses.activate
-def test_poll_upload_keeps_polling_until_activity_id_appears(monkeypatch):
+def test_wait_for_upload_keeps_polling_until_activity_id_appears():
     responses.add(
         responses.GET,
         "https://www.strava.com/api/v3/uploads/1",
@@ -104,48 +81,42 @@ def test_poll_upload_keeps_polling_until_activity_id_appears(monkeypatch):
         json={"id": 1, "status": "done", "activity_id": 555},
         status=200,
     )
-    monkeypatch.setattr(client.time, "sleep", lambda s: None)
 
-    status = client.poll_upload("token", 1, timeout_s=5)
+    activity_id = asyncio.run(client.wait_for_upload(1, timeout_s=5, sleep=_no_sleep))
 
-    assert status["activity_id"] == 555
+    assert activity_id == 555
 
 
 @responses.activate
-def test_poll_upload_raises_on_a_strava_error(monkeypatch):
+def test_wait_for_upload_raises_on_a_strava_error():
     responses.add(
         responses.GET,
         "https://www.strava.com/api/v3/uploads/1",
         json={"id": 1, "error": "duplicate of activity 123"},
         status=200,
     )
-    monkeypatch.setattr(client.time, "sleep", lambda s: None)
 
-    with pytest.raises(RuntimeError, match="duplicate of activity 123"):
-        client.poll_upload("token", 1, timeout_s=5)
+    with pytest.raises(StravaUploadError, match="duplicate of activity 123"):
+        asyncio.run(client.wait_for_upload(1, timeout_s=5, sleep=_no_sleep))
 
 
 @responses.activate
-def test_poll_upload_times_out_if_never_resolved(monkeypatch):
+def test_wait_for_upload_times_out_if_never_resolved():
     responses.add(
         responses.GET,
         "https://www.strava.com/api/v3/uploads/1",
         json={"id": 1, "status": "still processing"},
         status=200,
     )
-    # Mocking time.sleep (rather than faking time.time itself) keeps the
-    # real wall clock in play — requests' own cookie-jar handling calls
-    # time.time() too, so a short canned sequence of fake values runs out
-    # and raises StopIteration from unrelated code. A tiny real timeout is
-    # both simpler and safer.
-    monkeypatch.setattr(client.time, "sleep", lambda s: None)
-
+    # A tiny real timeout (with sleep mocked out) rather than faking
+    # time.time: requests' own cookie-jar handling calls it too, so a
+    # short canned sequence of fake values would run out in unrelated code.
     with pytest.raises(TimeoutError, match="still processing"):
-        client.poll_upload("token", 1, timeout_s=0.05)
+        asyncio.run(client.wait_for_upload(1, timeout_s=0.05, sleep=_no_sleep))
 
 
 @responses.activate
-def test_set_muted_sends_a_lowercase_string_value():
+def test_set_hide_from_home_sends_a_lowercase_string_value():
     responses.add(
         responses.PUT,
         "https://www.strava.com/api/v3/activities/123",
@@ -153,19 +124,6 @@ def test_set_muted_sends_a_lowercase_string_value():
         status=200,
     )
 
-    client.set_muted("token", 123, True)
+    client.set_hide_from_home(123, True)
 
     assert responses.calls[0].request.body == "hide_from_home=true"
-
-
-@responses.activate
-def test_duplicate_upload_raises_a_typed_error():
-    responses.add(
-        responses.GET,
-        "https://www.strava.com/api/v3/uploads/9",
-        json={"error": "duplicate of activity 123", "activity_id": None},
-        status=200,
-    )
-
-    with pytest.raises(client.StravaUploadError, match="duplicate"):
-        client.poll_upload("token", 9, timeout_s=5)

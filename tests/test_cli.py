@@ -16,7 +16,7 @@ import sys
 
 import responses
 
-from liftostrava.cli import sync
+from liftostrava.cli import config, sync
 
 
 def test_dry_run_prints_the_built_payload_without_network_or_credentials(tmp_path):
@@ -185,7 +185,7 @@ def test_main_runs_the_full_upload_flow(tmp_path, monkeypatch, capsys):
             }
         )
     )
-    monkeypatch.setattr(sync, "ENV_PATH", str(_write_env(tmp_path)))
+    monkeypatch.setattr(config, "ENV_PATH", str(_write_env(tmp_path)))
     monkeypatch.setattr(sys, "argv", ["sync-to-strava", str(workout_file)])
 
     responses.add(
@@ -230,7 +230,7 @@ def test_main_with_public_flag_skips_muting(tmp_path, monkeypatch, capsys):
             {"start_time": "2026-08-24T16:56:02Z", "elapsed_time": 100, "exercises": []}
         )
     )
-    monkeypatch.setattr(sync, "ENV_PATH", str(_write_env(tmp_path)))
+    monkeypatch.setattr(config, "ENV_PATH", str(_write_env(tmp_path)))
     monkeypatch.setattr(sys, "argv", ["sync-to-strava", str(workout_file), "--public"])
 
     responses.add(

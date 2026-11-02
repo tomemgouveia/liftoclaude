@@ -8,7 +8,7 @@ import base64
 
 from cloudflare.credential_crypto import STATE_LABEL, decrypt, derive_key
 from cloudflare.oauth_state import STATE_TTL_SECONDS, sign_state, verify_state
-from liftostrava.strava import auth
+from liftostrava.strava.oauth import StravaOAuth
 
 KEY = b"k" * 32
 
@@ -56,8 +56,8 @@ def test_decrypt_returns_legacy_plaintext_unchanged():
 
 
 def test_authorize_url_supports_a_custom_redirect_and_state():
-    url = auth.build_authorize_url(
-        "cid", "https://w.example/connect/strava/callback", "a.b"
+    url = StravaOAuth("cid", "secret").authorize_url(
+        "https://w.example/connect/strava/callback", "a.b"
     )
 
     assert "redirect_uri=https://w.example/connect/strava/callback" in url
@@ -92,10 +92,9 @@ def test_history_range_rejects_bad_input():
 
 def test_workout_json_brief_is_id_name_date_only():
     from cloudflare.workout_json import workout_json
-    from liftostrava.models import Exercise, Set, Workout
-    from liftostrava.sources.base import WorkoutEntry
+    from liftostrava.domain import Exercise, Set, Workout, WorkoutRecord
 
-    entry = WorkoutEntry(
+    entry = WorkoutRecord(
         id="42",
         workout=Workout(
             start_time="2026-10-31T09:00:00Z",

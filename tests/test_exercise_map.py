@@ -8,7 +8,7 @@ import re
 
 import pytest
 
-from liftostrava.strava.exercise_map import EXERCISE_TYPE_MAP, exercise_type_for
+from liftostrava.strava.payload import EXERCISE_TYPE_MAP, exercise_type_for
 
 
 @pytest.mark.parametrize(

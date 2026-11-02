@@ -1,4 +1,4 @@
-"""Locks in LiftosaurApiSource against the REST API's shape, with the GET
+"""Locks in LiftosaurClient against the REST API's shape, with the GET
 mocked via `responses` (no real network, no real API key) — matching the
 pattern in test_strava_client.py. The parsing itself is
 test_liftohistory_parser.py's job; this only checks the HTTP plumbing:
@@ -11,8 +11,9 @@ shape documented at https://www.liftosaur.com/doc/api.
 import pytest
 import responses
 
-from liftostrava.models import Exercise, Set, Workout
-from liftostrava.sources.api import LiftosaurApiSource
+from liftostrava.domain import Exercise, Set, Workout
+from liftostrava.errors import MissingCredentials
+from liftostrava.liftosaur.client import LiftosaurClient
 
 RECORD_TEXT = (
     '2026-09-11 17:30:05 +00:00 / program: "L/S/U" / dayName: "Upper" / '
@@ -33,7 +34,7 @@ def test_get_workout_hits_the_history_url_with_a_bearer_header():
         status=200,
     )
 
-    LiftosaurApiSource("test-api-key").get_workout("12345")
+    LiftosaurClient("test-api-key").get_workout("12345")
 
     assert len(responses.calls) == 1
     sent = responses.calls[0].request
@@ -52,9 +53,9 @@ def test_get_workout_parses_the_response_text_field():
         status=200,
     )
 
-    entry = LiftosaurApiSource("test-api-key").get_workout("12345")
+    workout = LiftosaurClient("test-api-key").get_workout("12345")
 
-    assert entry.workout == Workout(
+    assert workout == Workout(
         start_time="2026-09-11T17:30:05Z",
         elapsed_time=2625,
         name="L/S/U - Upper",
@@ -64,9 +65,9 @@ def test_get_workout_parses_the_response_text_field():
     )
 
 
-def test_api_source_raises_a_clear_error_when_api_key_is_unset():
-    with pytest.raises(RuntimeError, match="LIFTOSAUR_API_KEY"):
-        LiftosaurApiSource("")
+def test_client_raises_a_clear_error_when_api_key_is_unset():
+    with pytest.raises(MissingCredentials, match="LIFTOSAUR_API_KEY"):
+        LiftosaurClient("")
 
 
 @responses.activate
@@ -78,7 +79,7 @@ def test_list_history_parses_every_record_on_a_single_page():
         status=200,
     )
 
-    entries = LiftosaurApiSource("test-api-key").list_history()
+    entries = LiftosaurClient("test-api-key").list_history()
 
     assert len(entries) == 1
     assert entries[0].id == "2"
@@ -106,7 +107,7 @@ def test_list_history_follows_pagination_until_hasmore_is_false():
         status=200,
     )
 
-    entries = LiftosaurApiSource("test-api-key").list_history()
+    entries = LiftosaurClient("test-api-key").list_history()
 
     assert [e.id for e in entries] == ["1", "2"]
     assert len(responses.calls) == 2
@@ -123,7 +124,7 @@ def test_list_history_passes_start_and_end_date_as_query_params():
         status=200,
     )
 
-    LiftosaurApiSource("test-api-key").list_history(
+    LiftosaurClient("test-api-key").list_history(
         start_date="2026-09-01", end_date="2026-09-11"
     )
 
@@ -133,8 +134,8 @@ def test_list_history_passes_start_and_end_date_as_query_params():
 
 
 def test_list_history_raises_a_clear_error_when_api_key_is_unset(monkeypatch):
-    with pytest.raises(RuntimeError, match="LIFTOSAUR_API_KEY"):
-        LiftosaurApiSource("").list_history()
+    with pytest.raises(MissingCredentials, match="LIFTOSAUR_API_KEY"):
+        LiftosaurClient("").list_history()
 
 
 @responses.activate
@@ -152,10 +153,9 @@ def test_get_workout_matches_string_id_to_numeric_record_id(monkeypatch):
         status=200,
     )
 
-    entry = LiftosaurApiSource("test-api-key").get_workout("1793000205964")
+    workout = LiftosaurClient("test-api-key").get_workout("1793000205964")
 
-    assert entry.id == "1793000205964"
-    assert entry.workout.name == "L/S/U - Upper"
+    assert workout.name == "L/S/U - Upper"
 
 
 @responses.activate
@@ -184,9 +184,8 @@ def test_get_workout_searches_later_pages_when_id_is_not_on_first_page():
         status=200,
     )
 
-    entry = LiftosaurApiSource("test-api-key").get_workout("1793000205964")
+    LiftosaurClient("test-api-key").get_workout("1793000205964")
 
-    assert entry.id == "1793000205964"
     assert len(responses.calls) == 2
 
 
@@ -200,7 +199,7 @@ def test_get_workout_raises_clear_error_when_id_is_not_in_history(monkeypatch):
         status=200,
     )
     with pytest.raises(LookupError, match="Workout 'missing' was not found"):
-        LiftosaurApiSource("test-api-key").get_workout("missing")
+        LiftosaurClient("test-api-key").get_workout("missing")
 
 
 @responses.activate
@@ -218,7 +217,7 @@ def test_get_workout_stops_paging_once_the_record_is_found():
         status=200,
     )
 
-    LiftosaurApiSource("test-api-key").get_workout("7")
+    LiftosaurClient("test-api-key").get_workout("7")
 
     assert len(responses.calls) == 1
 
@@ -235,4 +234,4 @@ def test_health_check_only_reports_false_for_rejected_keys(status, expected):
         status=status,
     )
 
-    assert LiftosaurApiSource("test-api-key").health_check() is expected
+    assert LiftosaurClient("test-api-key").health_check() is expected

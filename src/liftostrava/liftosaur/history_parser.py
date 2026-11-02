@@ -1,7 +1,7 @@
 """Pure parser for Liftohistory — the human-readable text format Liftosaur
 uses for workout history records, returned as-is by the MCP `get_history`/
 `get_history_record` tools' `text` field *and* by the REST API's
-`GET /api/v1/history(/:id)` (see sources/api.py, the only caller of this
+`GET /api/v1/history(/:id)` (see liftosaur/client.py, the only caller of this
 module). No I/O here, so it's unit-testable directly against real records.
 
 Example record (from `get_liftohistory_reference`):
@@ -29,7 +29,7 @@ import re
 from datetime import UTC, datetime
 from typing import Literal
 
-from liftostrava.models import Exercise, Set, Workout
+from liftostrava.domain import Exercise, Set, Workout
 
 # "2x8 42.5kg", "3x8|7 0lb", "1x5+ 185lb", "3x8 185lb @7" — count x reps,
 # optional "+" (AMRAP, ignored), optional "|N" (unilateral second-side

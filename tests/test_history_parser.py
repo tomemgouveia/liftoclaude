@@ -7,8 +7,8 @@ case here is exercised with no mocking or I/O.
 
 import pytest
 
-from liftostrava.models import Exercise, Set, Workout
-from liftostrava.sources.liftohistory import parse_liftohistory
+from liftostrava.domain import Exercise, Set, Workout
+from liftostrava.liftosaur.history_parser import parse_liftohistory
 
 # Real record: kg-only weights, an exercise with only completed sets and
 # no warmup/target at all ("Incline Crunch"), unilateral sets that happen
