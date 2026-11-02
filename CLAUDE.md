@@ -15,7 +15,9 @@ fallback otherwise — plus the privacy and credentials caveats.
   - `liftosaur/` — REST client, Liftohistory parser, MCP JSON bridge
   - `strava/` — `StravaOAuth`, `StravaClient`, payload building
   - `cli/` — `sync-to-strava` and `strava-auth` entry points (`.env` token store)
-- `src/liftostrava_worker/` — Cloudflare Worker (routes, D1 repository);
+- `src/liftostrava_worker/` — Cloudflare Worker: `entry.py` (dispatch),
+  `routes/` (handlers + their helpers), `security/` (Access JWT, OAuth
+  state, credential crypto), `storage/` (D1 repository, models);
   `src/cloudflare_worker.py` is the `wrangler.toml` entry shim
 - Style: dataclasses for data, pure functions for transformations, small
   classes for API clients, `Protocol`s only where there are two real

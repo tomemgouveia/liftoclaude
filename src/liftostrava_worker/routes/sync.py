@@ -8,8 +8,8 @@ from liftostrava.errors import StravaUploadError
 from liftostrava.liftosaur.client import LiftosaurClient
 from liftostrava.service import DEFAULT_TIMEZONE, SyncService
 from liftostrava_worker.context import AppContext
-from liftostrava_worker.models import AccessIDKey
-from liftostrava_worker.repository import D1TokenStore
+from liftostrava_worker.storage.models import AccessIDKey
+from liftostrava_worker.storage.repository import D1TokenStore
 
 logger = logging.getLogger(__name__)
 

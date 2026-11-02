@@ -116,3 +116,4 @@ The CLI contract in `CLAUDE.md` (`uv run sync-to-strava --from-api <id>` and the
 - Kept the existing `LiftosaurClient.list_history` / `get_workout` names (a method called `list` would shadow the builtin).
 - Worker module names: `crypto.py` and `access_jwt.py` (from `credential_crypto.py` / `process_jwt.py`).
 - `liftosaur/mcp_export.py` is now two functions, `load_workout` and `list_exported`. `list_exported` has no caller outside tests; consider deleting it.
+- The worker package is grouped by concern: `routes/`, `security/`, `storage/`, plus `entry.py` and `context.py` at the top.

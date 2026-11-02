@@ -7,13 +7,13 @@ from urllib.parse import urlparse
 
 from workers import Request, Response, WorkerEntrypoint
 
-from liftostrava_worker.access_jwt import process_jwt
 from liftostrava_worker.context import AppContext
-from liftostrava_worker.http import origin
-from liftostrava_worker.models import AccessIDKey
+from liftostrava_worker.routes.common import origin
 from liftostrava_worker.routes.connect import handle_connect
 from liftostrava_worker.routes.history import handle_history
 from liftostrava_worker.routes.sync import handle_sync
+from liftostrava_worker.security.access_jwt import process_jwt
+from liftostrava_worker.storage.models import AccessIDKey
 
 logger = logging.getLogger(__name__)
 

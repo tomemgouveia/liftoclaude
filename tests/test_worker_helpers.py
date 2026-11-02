@@ -7,8 +7,12 @@ import asyncio
 import base64
 
 from liftostrava.strava.oauth import StravaOAuth
-from liftostrava_worker.crypto import STATE_LABEL, decrypt, derive_key
-from liftostrava_worker.oauth_state import STATE_TTL_SECONDS, sign_state, verify_state
+from liftostrava_worker.security.crypto import STATE_LABEL, decrypt, derive_key
+from liftostrava_worker.security.oauth_state import (
+    STATE_TTL_SECONDS,
+    sign_state,
+    verify_state,
+)
 
 KEY = b"k" * 32
 
@@ -67,7 +71,7 @@ def test_authorize_url_supports_a_custom_redirect_and_state():
 def test_history_range_defaults_to_last_week_in_user_timezone():
     from datetime import UTC, datetime
 
-    from liftostrava_worker.history_range import parse_history_range
+    from liftostrava_worker.routes.history_range import parse_history_range
 
     now = datetime(2026, 11, 1, 23, 30, tzinfo=UTC)
     start, end = parse_history_range({}, "Asia/Tokyo", now=now)
@@ -79,7 +83,10 @@ def test_history_range_defaults_to_last_week_in_user_timezone():
 def test_history_range_rejects_bad_input():
     import pytest
 
-    from liftostrava_worker.history_range import HistoryRangeError, parse_history_range
+    from liftostrava_worker.routes.history_range import (
+        HistoryRangeError,
+        parse_history_range,
+    )
 
     for params in (
         {"start": ["nope"]},
@@ -92,7 +99,7 @@ def test_history_range_rejects_bad_input():
 
 def test_workout_json_brief_is_id_name_date_only():
     from liftostrava.domain import Exercise, Set, Workout, WorkoutRecord
-    from liftostrava_worker.workout_json import workout_json
+    from liftostrava_worker.routes.workout_json import workout_json
 
     entry = WorkoutRecord(
         id="42",

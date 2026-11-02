@@ -4,8 +4,8 @@ the services built from them."""
 from typing import Any
 
 from liftostrava.strava.oauth import StravaOAuth
-from liftostrava_worker.crypto import AES_LABEL, derive_key
-from liftostrava_worker.repository import UserRepository
+from liftostrava_worker.security.crypto import AES_LABEL, derive_key
+from liftostrava_worker.storage.repository import UserRepository
 
 
 class AppContext:

@@ -6,8 +6,8 @@ import uuid
 from typing import Any
 
 from liftostrava.tokens import StravaTokens
-from liftostrava_worker.crypto import decrypt, encrypt
-from liftostrava_worker.models import AccessIDKey, User
+from liftostrava_worker.security.crypto import decrypt, encrypt
+from liftostrava_worker.storage.models import AccessIDKey, User
 
 logger = logging.getLogger(__name__)
 

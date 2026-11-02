@@ -8,7 +8,7 @@ from typing import Any
 
 from pyodide.ffi import JsException
 
-from liftostrava_worker.models import AccessIDKey
+from liftostrava_worker.storage.models import AccessIDKey
 
 logger = logging.getLogger(__name__)
 

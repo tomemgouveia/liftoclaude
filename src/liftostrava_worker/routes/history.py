@@ -6,9 +6,12 @@ from workers import Request, Response
 
 from liftostrava.liftosaur.client import LiftosaurClient
 from liftostrava_worker.context import AppContext
-from liftostrava_worker.history_range import HistoryRangeError, parse_history_range
-from liftostrava_worker.models import AccessIDKey
-from liftostrava_worker.workout_json import workout_json
+from liftostrava_worker.routes.history_range import (
+    HistoryRangeError,
+    parse_history_range,
+)
+from liftostrava_worker.routes.workout_json import workout_json
+from liftostrava_worker.storage.models import AccessIDKey
 
 logger = logging.getLogger(__name__)
 
