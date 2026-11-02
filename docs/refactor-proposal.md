@@ -107,3 +107,12 @@ The CLI contract in `CLAUDE.md` (`uv run sync-to-strava --from-api <id>` and the
 4. `SyncService` and the thin CLI.
 5. Worker package rename, split and shim.
 6. Skill, `CLAUDE.md` and docs.
+
+## As implemented — deviations from the plan above
+
+- Commits were grouped as: core library + CLI, worker, then skill/docs (the intermediate steps weren't independently green because `SyncService` touches everything).
+- The CLI stayed inside the package as `liftostrava/cli/` (no separate `liftostrava_cli` package), so the console-script entry points and the wheel are unchanged.
+- No `settings.py`: `.env` handling is CLI-only (`cli/config.py`, `cli/env_store.py`); the core takes explicit arguments and the worker builds its own from env bindings (`liftostrava_worker/context.py`).
+- Kept the existing `LiftosaurClient.list_history` / `get_workout` names (a method called `list` would shadow the builtin).
+- Worker module names: `crypto.py` and `access_jwt.py` (from `credential_crypto.py` / `process_jwt.py`).
+- `liftosaur/mcp_export.py` is now two functions, `load_workout` and `list_exported`. `list_exported` has no caller outside tests; consider deleting it.

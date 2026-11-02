@@ -37,7 +37,7 @@ reachable.
 
 Without an API key, Claude Code can use the Liftosaur MCP tools to find and
 retrieve a workout, then write a JSON file for the CLI. The repository's
-[Claude instructions](../CLAUDE.md) describe this flow, including how to
+[sync-to-strava skill](../.claude/skills/sync-to-strava/SKILL.md) describe this flow, including how to
 include completed sets and avoid warmup or target sets.
 
 Keep temporary workout files in `workouts/`, which is gitignored. Use a
