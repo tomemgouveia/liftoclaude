@@ -153,10 +153,26 @@ def build_payload(workout: Workout, utc_offset: int) -> dict:
                     "start_time": workout.start_time,
                 }
             )
-    return {
+    payload = {
         "version": "1.0",
         "start_time": workout.start_time,
         "utc_offset": utc_offset,
         "elapsed_time": workout.elapsed_time,
         "sets": sets,
     }
+    streams = build_streams(workout)
+    if streams:
+        payload["streams"] = streams
+    return payload
+
+
+def build_streams(workout: Workout) -> dict | None:
+    """Strava's `streams` object: `time` (seconds from start_time) and a
+    same-length `heartrate` array. None when the workout has no heart rate.
+    Sorted by time; a repeated offset keeps its last sample, since Strava
+    wants one value per time point."""
+    if not workout.heart_rate:
+        return None
+    by_offset = {sample.offset_s: sample.bpm for sample in workout.heart_rate}
+    times = sorted(by_offset)
+    return {"time": times, "heartrate": [by_offset[t] for t in times]}

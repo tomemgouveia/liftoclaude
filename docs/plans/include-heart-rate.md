@@ -133,7 +133,7 @@ Each phase ends with something runnable.
    parse/filter/validate, `NotSyncedYet`, tests.
 3. **JSON streams spike (DONE).** Sets plus `streams.heartrate` in one JSON
    upload: both showed up in Strava. Go.
-4. **Payload (about 1 hour).** `build_payload` adds `streams`; tests (shape,
+4. **Payload (DONE).** `build_payload` adds `streams`; tests (shape,
    equal lengths, duplicates, absent samples leave the payload unchanged).
    `preview_upload` / `--dry-run` shows a summary of the streams (count,
    first/last sample).
