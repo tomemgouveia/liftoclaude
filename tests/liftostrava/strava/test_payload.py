@@ -8,14 +8,16 @@ UTC+0.
 """
 
 import re
+from dataclasses import replace
 from zoneinfo import ZoneInfo
 
 import pytest
 
-from liftostrava.domain import Exercise, Set, Workout
+from liftostrava.domain import Exercise, HeartRateSample, Set, Workout
 from liftostrava.strava.payload import (
     EXERCISE_TYPE_MAP,
     build_payload,
+    build_streams,
     exercise_type_for,
     upload_form_fields,
     utc_offset_at,
@@ -162,3 +164,34 @@ def test_every_curated_mapping_is_a_well_formed_strava_enum_value(
         f"{liftosaur_name!r} maps to {strava_value!r}, which isn't "
         "upper-snake-case — check it against developers.strava.com/docs/uploads/"
     )
+
+
+def test_payload_has_no_streams_without_heart_rate(sample_workout):
+    assert "streams" not in build_payload(sample_workout, 0)
+    assert build_streams(sample_workout) is None
+
+
+def test_payload_adds_streams_with_equal_length_arrays(sample_workout):
+    workout = replace(
+        sample_workout,
+        heart_rate=[
+            HeartRateSample(0, 90),
+            HeartRateSample(5, 95),
+            HeartRateSample(10, 99),
+        ],
+    )
+    payload = build_payload(workout, 0)
+    assert payload["streams"] == {"time": [0, 5, 10], "heartrate": [90, 95, 99]}
+    assert len(payload["sets"]) == len(build_payload(sample_workout, 0)["sets"])
+
+
+def test_streams_are_sorted_and_keep_the_last_sample_per_offset(sample_workout):
+    workout = replace(
+        sample_workout,
+        heart_rate=[
+            HeartRateSample(10, 99),
+            HeartRateSample(0, 90),
+            HeartRateSample(10, 101),
+        ],
+    )
+    assert build_streams(workout) == {"time": [0, 10], "heartrate": [90, 101]}

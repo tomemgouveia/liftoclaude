@@ -61,14 +61,57 @@ The Worker's JSON API:
 - `GET /api/workouts?start=YYYY-MM-DD&end=YYYY-MM-DD` lists workouts, newest
   first. Both bounds are inclusive days in the user's timezone and default to
   the last 7 days.
-- `POST /api/sync` with `{"workout_id": "..."}` syncs one workout.
+- `POST /api/sync` with `{"workout_id": "..."}` syncs one workout. Add
+  `"heart_rate": [{"time": "<ISO 8601 with offset>", "bpm": 120}, ...]` to
+  upload it with a heart-rate stream. A Shortcut can instead send two
+  parallel lists of equal length, `"heart_rate": {"time": [...], "bpm": [...]}`,
+  which avoids a "Repeat with each" loop. A `bpm` given as text such as
+  `"72 count/min"` is read by its leading number. The Worker keeps samples inside the
+  workout's window. If there are none, it uploads the workout without heart
+  rate and says so. If there are some but they stop more than 60 seconds
+  before the workout ends, it replies `425` ("not synced yet", nothing
+  uploaded). Omit `heart_rate` for the plain upload. Add `"dry_run": true` (with
+  `heart_rate`) to get a JSON report of what the check saw (including how
+  many items were unreadable, with examples), without uploading.
 - `GET`/`POST /api/settings` read and save the signed-in user's Liftosaur key
   and timezone for the `/connect` page. `/connect/strava` and
   `/connect/strava/callback` remain server-side OAuth redirects.
 
 `GET /` (without `Accept: text/html`) and `POST /` still work for Shortcuts.
-`GET /` returns the compact `{id, name, date}` list; add `?brief=1` to
+`GET /` returns the compact `{id, name, date, start, end}` list (`start` and
+`end` are the workout window in UTC, for querying Apple Health); add `?brief=1` to
 `/api/workouts` for the same compact shape with a date range.
+
+## Heart rate from a Shortcut
+
+To add heart rate to a synced workout, the Shortcut sends the Apple Health
+samples along with the workout id. Without a "Repeat with each" loop:
+
+1. `GET /` and pick a workout. Each item has `start` and `end` (UTC).
+2. "Find Health Samples" (Type = Heart Rate). Filtering to the workout's
+   window keeps the request small; the Worker also filters, so sending a
+   wider range works.
+3. `POST /api/sync` with a JSON body: `workout_id` (text) and `heart_rate`
+   (a dictionary) with `time` set to the samples' **Start Date** and `bpm`
+   set to the **Health Samples** themselves, both as plain variables. Do not
+   use "Get Details of Health Samples" for these: its output arrived empty.
+   Shortcuts turns each list into text with one value per line, which the
+   Worker reads (dates as ISO 8601 such as `2026-11-12T08:47:34Z`).
+4. Add `"dry_run": true` first. The response reports `received`,
+   `unreadable` (with examples), `samples_in_window`, first and last sample,
+   the workout's start and end, `covers_workout`, and `shape` (the types and
+   lengths of what arrived, never the values).
+5. A `425` means some samples exist but stop more than 60 seconds before the
+   workout ends (usually the watch has not finished syncing); nothing was
+   uploaded. No samples at all uploads the workout without heart rate.
+
+Heart rate only lands densely in Apple Health while the Watch is recording a
+workout session. Outside one, the Watch logs a sample every few minutes, so
+the workout window has gaps or stops early, and the Worker answers `425`
+every time, however long you wait (if there are no samples at all, it uploads
+without heart rate). Start a workout on the Watch (for
+example Strength Training) before lifting, or omit `heart_rate` to sync the
+workout without it.
 
 ## Access authentication for users and Shortcuts
 

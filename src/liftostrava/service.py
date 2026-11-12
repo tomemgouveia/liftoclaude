@@ -45,10 +45,22 @@ def preview_upload(
 ) -> dict:
     """What sync() would send to Strava, without calling it or needing
     credentials. Built from the same functions the real upload uses, so
-    the two can't diverge."""
+    the two can't diverge. The one display-only change: the (long) heart-rate
+    arrays in `streams` are shown as a summary."""
+    file_content = build_payload(workout, resolve_utc_offset(workout, tz))
+    if "streams" in file_content:
+        times = file_content["streams"]["time"]
+        bpms = file_content["streams"]["heartrate"]
+        file_content["streams"] = {
+            "samples": len(times),
+            "first_offset_s": times[0],
+            "last_offset_s": times[-1],
+            "min_bpm": min(bpms),
+            "max_bpm": max(bpms),
+        }
     return {
         "form_fields": upload_form_fields(workout),
-        "file_content": build_payload(workout, resolve_utc_offset(workout, tz)),
+        "file_content": file_content,
         "hide_from_home_after_upload": hide_from_home,
     }
 

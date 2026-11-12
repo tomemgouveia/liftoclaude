@@ -6,3 +6,8 @@ class StravaUploadError(RuntimeError):
 class MissingCredentials(RuntimeError):
     """A required credential (Strava app keys, refresh token, Liftosaur
     API key) isn't configured."""
+
+
+class NotSyncedYet(RuntimeError):
+    """Heart-rate data doesn't cover the whole workout yet, usually because
+    the watch hasn't synced to the phone. Nothing was uploaded; retry later."""

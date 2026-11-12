@@ -257,3 +257,58 @@ def test_main_with_public_flag_skips_muting(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "https://www.strava.com/activities/999" in out
     assert not any(c.request.method == "PUT" for c in responses.calls)
+
+
+def _run_dry_run_with_heart_rate(tmp_path, samples):
+    workout_file = tmp_path / "workout.json"
+    workout_file.write_text(
+        json.dumps(
+            {
+                "start_time": "2026-08-24T16:56:02Z",
+                "elapsed_time": 100,
+                "exercises": [
+                    {"name": "Squat", "sets": [{"reps": 5, "weight_kg": 60}]}
+                ],
+            }
+        )
+    )
+    heart_rate_file = tmp_path / "hr.json"
+    heart_rate_file.write_text(json.dumps(samples))
+    return subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "liftostrava.cli.sync",
+            str(workout_file),
+            "--heart-rate",
+            str(heart_rate_file),
+            "--dry-run",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_dry_run_with_heart_rate_reports_coverage_and_streams(tmp_path):
+    result = _run_dry_run_with_heart_rate(
+        tmp_path,
+        [
+            {"time": "2026-08-24T16:56:12Z", "bpm": 100},
+            {"time": "2026-08-24T16:57:40Z", "bpm": 120},
+        ],
+    )
+
+    assert result.returncode == 0
+    assert '"covers_workout": true' in result.stdout
+    assert '"samples": 2' in result.stdout  # streams summary in the preview
+
+
+def test_dry_run_with_heart_rate_that_stops_early_fails_with_the_reason(tmp_path):
+    result = _run_dry_run_with_heart_rate(
+        tmp_path, [{"time": "2026-08-24T16:56:12Z", "bpm": 100}]
+    )
+
+    assert result.returncode == 1
+    assert '"covers_workout": false' in result.stdout  # the report is shown
+    assert "only runs to 16:56" in result.stdout

@@ -3,11 +3,13 @@ an in-memory TokenStore — the same flow the CLI and the worker share."""
 
 import asyncio
 import time
+from dataclasses import replace
 from zoneinfo import ZoneInfo
 
 import pytest
 import responses
 
+from liftostrava.domain import HeartRateSample
 from liftostrava.errors import MissingCredentials
 from liftostrava.service import SyncService, preview_upload, resolve_utc_offset
 from liftostrava.strava.oauth import StravaOAuth
@@ -138,3 +140,18 @@ def test_preview_matches_what_would_be_uploaded(sample_workout):
     assert preview["form_fields"]["name"] == "Fierce 5 - Workout A"
     assert preview["file_content"]["utc_offset"] == 3600
     assert preview["hide_from_home_after_upload"] is False
+
+
+def test_preview_summarises_streams_instead_of_dumping_them(sample_workout):
+    workout = replace(
+        sample_workout,
+        heart_rate=[HeartRateSample(0, 90), HeartRateSample(600, 130)],
+    )
+    streams = preview_upload(workout)["file_content"]["streams"]
+    assert streams == {
+        "samples": 2,
+        "first_offset_s": 0,
+        "last_offset_s": 600,
+        "min_bpm": 90,
+        "max_bpm": 130,
+    }

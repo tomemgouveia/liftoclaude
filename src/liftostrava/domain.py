@@ -3,7 +3,7 @@
 of how the data arrived — parsed from a REST API record or loaded from
 the JSON file written after an MCP call."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 
@@ -12,6 +12,12 @@ class Set:
     reps: int
     weight: float
     unit: Literal["kg", "lb"] = "kg"
+
+
+@dataclass(frozen=True)
+class HeartRateSample:
+    offset_s: int  # seconds since the workout's start_time
+    bpm: int
 
 
 @dataclass(frozen=True)
@@ -31,6 +37,9 @@ class Workout:
     # display. Normally left unset so SyncService derives it from the
     # athlete's timezone.
     utc_offset: int | None = None
+    # Samples inside the workout window, oldest first. Empty means "no
+    # heart-rate data was supplied" and keeps the plain JSON upload.
+    heart_rate: list[HeartRateSample] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
