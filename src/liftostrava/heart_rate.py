@@ -59,22 +59,43 @@ def _parse_sample(raw: object) -> tuple[datetime, int] | None:
     return moment, bpm
 
 
+def _as_list(value: object) -> list | None:
+    """A list, or text holding one item per line (what Shortcuts sends when
+    a list is coerced to text)."""
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        return [line.strip() for line in value.splitlines() if line.strip()]
+    return None
+
+
 def raw_items(raw_samples: object) -> list:
     """The samples as a list of `{"time", "bpm"}` items. Accepts that list
-    directly, or parallel arrays `{"time": [...], "bpm": [...]}` of equal
-    length (what a Shortcut can build without a loop). Anything else is
-    empty."""
+    directly, or parallel `{"time": ..., "bpm": ...}` lists of equal length
+    (what a Shortcut can build without a loop); each may also be text with
+    one value per line. Anything else is empty."""
     if isinstance(raw_samples, list):
         return raw_samples
     if isinstance(raw_samples, dict):
-        times, bpms = raw_samples.get("time"), raw_samples.get("bpm")
-        if (
-            isinstance(times, list)
-            and isinstance(bpms, list)
-            and len(times) == len(bpms)
-        ):
+        times = _as_list(raw_samples.get("time"))
+        bpms = _as_list(raw_samples.get("bpm"))
+        if times is not None and bpms is not None and len(times) == len(bpms):
             return [{"time": t, "bpm": b} for t, b in zip(times, bpms, strict=True)]
     return []
+
+
+def describe_shape(raw_samples: object) -> object:
+    """The structure of what was sent, without its values, to explain a
+    request that yielded no samples (for example unequal list lengths)."""
+
+    def one(value: object) -> str:
+        if isinstance(value, (list, str)):
+            return f"{type(value).__name__}[{len(value)}]"
+        return type(value).__name__
+
+    if isinstance(raw_samples, dict):
+        return {key: one(value) for key, value in raw_samples.items()}
+    return one(raw_samples)
 
 
 def workout_end(start_time: str, elapsed_time: int) -> datetime:
@@ -136,6 +157,7 @@ def coverage_report(raw_samples: object, start_time: str, elapsed_time: int) -> 
     unusable = [item for item in items if _parse_sample(item) is None]
     return {
         "received": len(items),
+        "shape": describe_shape(raw_samples),
         # Items we couldn't read (bad time or bpm), with a few examples to
         # show what the sender is actually producing.
         "unreadable": len(unusable),

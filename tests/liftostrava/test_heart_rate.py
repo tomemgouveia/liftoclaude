@@ -4,6 +4,7 @@ from liftostrava.domain import Exercise, HeartRateSample, Set, Workout
 from liftostrava.errors import NotSyncedYet
 from liftostrava.heart_rate import (
     coverage_report,
+    describe_shape,
     parse_iso,
     samples_for_workout,
     window_samples,
@@ -130,6 +131,7 @@ def test_coverage_report_describes_what_the_check_sees():
     assert coverage_report(raw, START, ELAPSED) == {
         "samples_in_window": 2,
         "received": 3,
+        "shape": "list[3]",
         "unreadable": 1,
         "unreadable_examples": ["'junk'"],
         "first_sample": "2026-11-11T17:46:00Z",
@@ -178,3 +180,20 @@ def test_window_unusable_parallel_arrays_are_empty(raw):
 def test_bpm_text_with_units(bpm, expected):
     result = window_samples([sample("2026-11-11T17:46:00Z", bpm)], START, ELAPSED)
     assert [s.bpm for s in result] == ([] if expected is None else [expected])
+
+
+def test_window_accepts_newline_separated_text_lists():
+    raw = {
+        "time": "2026-11-11T17:46:00Z\n2026-11-11T17:47:00Z\n",
+        "bpm": "100 count/min\n110 count/min",
+    }
+    assert [s.bpm for s in window_samples(raw, START, ELAPSED)] == [100, 110]
+
+
+def test_describe_shape_shows_types_and_lengths_not_values():
+    assert describe_shape({"time": ["a", "b"], "bpm": "1\n2", "x": 5}) == {
+        "time": "list[2]",
+        "bpm": "str[3]",
+        "x": "int",
+    }
+    assert describe_shape(None) == "NoneType"
