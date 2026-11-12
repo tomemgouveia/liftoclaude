@@ -29,8 +29,11 @@ async def handle_sync(
     # Absent: today's upload without heart rate. Present: the heart-rate
     # path, which never silently falls back to uploading without it.
     has_heart_rate = "heart_rate" in body
-    if has_heart_rate and not isinstance(body["heart_rate"], list):
-        return Response("'heart_rate' must be a list", status=400)
+    if has_heart_rate and not isinstance(body["heart_rate"], (list, dict)):
+        return Response(
+            "'heart_rate' must be a list of {time, bpm} or {time: [...], bpm: [...]}",
+            status=400,
+        )
     dry_run = body.get("dry_run") is True
     if dry_run and not has_heart_rate:
         return Response("'dry_run' needs 'heart_rate'", status=400)

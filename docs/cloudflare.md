@@ -63,12 +63,15 @@ The Worker's JSON API:
   the last 7 days.
 - `POST /api/sync` with `{"workout_id": "..."}` syncs one workout. Add
   `"heart_rate": [{"time": "<ISO 8601 with offset>", "bpm": 120}, ...]` to
-  upload it with a heart-rate stream. The Worker keeps samples inside the
+  upload it with a heart-rate stream. A Shortcut can instead send two
+  parallel lists of equal length, `"heart_rate": {"time": [...], "bpm": [...]}`,
+  which avoids a "Repeat with each" loop. A `bpm` given as text such as
+  `"72 count/min"` is read by its leading number. The Worker keeps samples inside the
   workout's window and replies `425` ("not synced yet", nothing uploaded)
   if they stop more than 60 seconds before the workout ends or there are
   none. Omit `heart_rate` for the plain upload. Add `"dry_run": true` (with
-  `heart_rate`) to get a JSON report of what the check saw, without
-  uploading.
+  `heart_rate`) to get a JSON report of what the check saw (including how
+  many items were unreadable, with examples), without uploading.
 - `GET`/`POST /api/settings` read and save the signed-in user's Liftosaur key
   and timezone for the `/connect` page. `/connect/strava` and
   `/connect/strava/callback` remain server-side OAuth redirects.

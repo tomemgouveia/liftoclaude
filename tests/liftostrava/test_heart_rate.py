@@ -129,6 +129,9 @@ def test_coverage_report_describes_what_the_check_sees():
     raw = [sample("2026-11-11T17:46:00Z"), sample("2026-11-11T17:50:00Z"), "junk"]
     assert coverage_report(raw, START, ELAPSED) == {
         "samples_in_window": 2,
+        "received": 3,
+        "unreadable": 1,
+        "unreadable_examples": ["'junk'"],
         "first_sample": "2026-11-11T17:46:00Z",
         "last_sample": "2026-11-11T17:50:00Z",
         "workout_start": "2026-11-11T17:45:17Z",
@@ -142,3 +145,36 @@ def test_coverage_report_with_no_samples():
     assert report["samples_in_window"] == 0
     assert report["first_sample"] is None
     assert report["covers_workout"] is False
+
+
+def test_window_accepts_parallel_arrays():
+    raw = {
+        "time": [
+            "2026-11-11T17:46:00Z",
+            "2026-11-11T17:47:00Z",
+            "2026-11-11T19:00:00Z",
+        ],
+        "bpm": [100, 110, 120],
+    }
+    assert [s.bpm for s in window_samples(raw, START, ELAPSED)] == [100, 110]
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        {"time": ["2026-11-11T17:46:00Z"], "bpm": [100, 110]},  # unequal
+        {"time": "x", "bpm": "y"},
+        {"bpm": [100]},
+    ],
+)
+def test_window_unusable_parallel_arrays_are_empty(raw):
+    assert window_samples(raw, START, ELAPSED) == []
+
+
+@pytest.mark.parametrize(
+    "bpm,expected",
+    [("72 count/min", 72), ("  95", 95), ("120.4 bpm", 120), ("count/min 72", None)],
+)
+def test_bpm_text_with_units(bpm, expected):
+    result = window_samples([sample("2026-11-11T17:46:00Z", bpm)], START, ELAPSED)
+    assert [s.bpm for s in result] == ([] if expected is None else [expected])

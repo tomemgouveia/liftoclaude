@@ -2,6 +2,7 @@
 the samples a Workout carries, and checking they cover the workout. Pure
 functions: no I/O, so the CLI and the Worker share them."""
 
+import re
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
@@ -25,21 +26,55 @@ def parse_iso(value: str) -> datetime:
     return parsed.astimezone(UTC)
 
 
+_LEADING_NUMBER = re.compile(r"\s*(\d+(?:\.\d+)?)")
+
+
+def _number(value: object) -> float | None:
+    """A bpm as a number. Shortcuts may send it as text, possibly with its
+    unit ("72 count/min"), so take the leading number of a string."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        match = _LEADING_NUMBER.match(value)
+        return float(match.group(1)) if match else None
+    return None
+
+
 def _parse_sample(raw: object) -> tuple[datetime, int] | None:
     """One raw `{"time": ..., "bpm": ...}` item, or None if it's unusable."""
     if not isinstance(raw, dict):
         return None
-    time_value, bpm_value = raw.get("time"), raw.get("bpm")
-    if not isinstance(time_value, str) or isinstance(bpm_value, bool):
+    time_value, bpm_value = raw.get("time"), _number(raw.get("bpm"))
+    if not isinstance(time_value, str) or bpm_value is None:
         return None
     try:
         moment = parse_iso(time_value)
-        bpm = round(float(bpm_value))  # Shortcuts may send numbers as text
-    except (TypeError, ValueError):
+    except ValueError:
         return None
+    bpm = round(bpm_value)
     if not MIN_BPM <= bpm <= MAX_BPM:
         return None
     return moment, bpm
+
+
+def raw_items(raw_samples: object) -> list:
+    """The samples as a list of `{"time", "bpm"}` items. Accepts that list
+    directly, or parallel arrays `{"time": [...], "bpm": [...]}` of equal
+    length (what a Shortcut can build without a loop). Anything else is
+    empty."""
+    if isinstance(raw_samples, list):
+        return raw_samples
+    if isinstance(raw_samples, dict):
+        times, bpms = raw_samples.get("time"), raw_samples.get("bpm")
+        if (
+            isinstance(times, list)
+            and isinstance(bpms, list)
+            and len(times) == len(bpms)
+        ):
+            return [{"time": t, "bpm": b} for t, b in zip(times, bpms, strict=True)]
+    return []
 
 
 def workout_end(start_time: str, elapsed_time: int) -> datetime:
@@ -51,11 +86,9 @@ def window_samples(
 ) -> list[HeartRateSample]:
     """Valid samples inside [start, start + elapsed], oldest first, as
     offsets from the start. Invalid items are dropped, not errors."""
-    if not isinstance(raw_samples, list):
-        return []
     start = parse_iso(start_time)
     end = workout_end(start_time, elapsed_time)
-    parsed = [p for p in map(_parse_sample, raw_samples) if p is not None]
+    parsed = [p for p in map(_parse_sample, raw_items(raw_samples)) if p is not None]
     inside = sorted((t, bpm) for t, bpm in parsed if start <= t <= end)
     return [HeartRateSample(int((t - start).total_seconds()), bpm) for t, bpm in inside]
 
@@ -99,7 +132,14 @@ def coverage_report(raw_samples: object, start_time: str, elapsed_time: int) -> 
     end = workout_end(start_time, elapsed_time)
     first = start + timedelta(seconds=samples[0].offset_s) if samples else None
     last = start + timedelta(seconds=samples[-1].offset_s) if samples else None
+    items = raw_items(raw_samples)
+    unusable = [item for item in items if _parse_sample(item) is None]
     return {
+        "received": len(items),
+        # Items we couldn't read (bad time or bpm), with a few examples to
+        # show what the sender is actually producing.
+        "unreadable": len(unusable),
+        "unreadable_examples": [repr(item)[:80] for item in unusable[:3]],
         "samples_in_window": len(samples),
         "first_sample": format_utc(first) if first else None,
         "last_sample": format_utc(last) if last else None,
