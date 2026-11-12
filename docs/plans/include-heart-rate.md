@@ -10,17 +10,38 @@ records and a raw REST response). So workouts synced by liftostrava reach
 Strava with no heart rate.
 
 Strava's API cannot attach a heart-rate stream to an existing activity, so
-the samples must be inside the file at upload time. The current upload is
-`data_type=json` ([payload.py](../../src/liftostrava/strava/payload.py)),
-which has no heart-rate field. A FIT file can carry both the exercise sets
-and per-second heart-rate records.
+the samples must be in the file at upload time.
+
+## Approach: JSON `streams`
+
+Strava's JSON strength upload (what we already send) has an optional
+`streams` object: `time` (seconds from `start_time`, required), `heartrate`
+(bpm) and `active`, all arrays of the same length. We add `streams` to the
+existing payload when heart-rate samples are supplied. Nothing else about
+the upload changes, so the verified exercise-type mapping in
+[payload.py](../../src/liftostrava/strava/payload.py) keeps working.
+
+**Verified by spike:** one JSON upload with `sets` and `streams.heartrate`
+produced a WeightTraining activity with the sets rendered by name and
+heart rate present (average 116, max 139, matching the fake test data).
+
+### Rejected: FIT upload
+
+A FIT file can also carry sets plus heart rate (also verified by spike), but
+it needs numeric FIT exercise enums. Strava's documented exercise list is
+the JSON vocabulary, and 22 of our 43 mapped exercises have no exact FIT
+equivalent (Leg Extension, Seated Leg Curl, machine Hip Thrust, Pallof
+Press, hip abductor/adductor machines, Skullcrusher, ...), so FIT would
+likely regress how they render. FIT also needs an encoder, and Garmin's FIT
+SDK licence limits use to "internal business purposes". JSON streams avoids
+all of that.
 
 ## Goals
 
 - A synced activity shows the exercise sets **and** a heart-rate graph.
 - Existing Shortcuts keep working unchanged (`POST /`, `POST /api/sync` with
-  only `{"workout_id": ...}`). No heart-rate data means today's JSON upload.
-- No new heart-rate source other than Apple Health, read by the Shortcut.
+  only `{"workout_id": ...}`). No `heart_rate` field means today's upload.
+- Heart rate source is Apple Health, read by the Shortcut.
 
 ## Non-goals
 
@@ -29,6 +50,9 @@ and per-second heart-rate records.
   activity in the Strava app, then re-sync. Strava's API has no delete or
   stream-edit endpoint, and it rejects duplicate uploads.
 - Other metrics (calories, HRV, zones).
+- Fixing exercises that already render as "Unknown" (separate work on
+  `EXERCISE_TYPE_MAP`; for example "Incline Bench Press, Dumbbell" is
+  unmapped today).
 
 ## Design
 
@@ -43,7 +67,7 @@ and per-second heart-rate records.
 4. Worker: fetch the workout from Liftosaur, validate the samples, and
    check they cover the workout through to its end.
    Latest sample before the end -> NotSyncedYet error, nothing uploaded.
-5. Worker: build the FIT file from workout + samples, upload to Strava.
+5. Worker: build the JSON payload with `streams`, upload to Strava.
 ```
 
 The workout window is `[start_time, start_time + elapsed_time]`. The
@@ -62,22 +86,23 @@ their meaning stay, so the current Shortcut is unaffected.
 
 `heart_rate` is optional and each sample is `{"time": "<ISO 8601>", "bpm": <int>}`.
 
-- **Field absent** (the current Shortcut): unchanged JSON upload, no heart rate.
+- **Field absent** (the current Shortcut): unchanged upload, no heart rate.
 - **Field present:** the Worker takes the heart-rate path and does not fall
   back silently. Samples are filtered to the workout window; invalid ones
-  (non-numeric, bpm outside 30-240, unparseable time) are dropped.
-  - Empty after filtering, or latest sample earlier than `end` minus a
-    tolerance: respond with `NotSyncedYet`, upload nothing. The user can
-    run the Shortcut again once the watch has synced.
-  - Otherwise: build FIT and upload.
+  (non-numeric, bpm outside 30-240, unparseable or naive time) are dropped.
+  - Empty after filtering, or latest sample earlier than `end` minus
+    `SYNC_TOLERANCE`: respond with `NotSyncedYet`, upload nothing. The user
+    can run the Shortcut again once the watch has synced.
+  - Otherwise: build the payload with `streams` and upload.
 
 ### NotSyncedYet
 
-New `NotSyncedYet` exception in [errors.py](../../src/liftostrava/errors.py),
-raised by the pure window check in `heart_rate.py` (so the CLI and Worker
-share it). The Worker maps it to HTTP 425 with a plain message ("Heart rate
-data only runs to 18:42, the workout ended 18:51. Wait for the watch to
-sync and try again."). 409 stays reserved for Strava duplicates.
+`NotSyncedYet` in [errors.py](../../src/liftostrava/errors.py), raised by
+`samples_for_workout` in [heart_rate.py](../../src/liftostrava/heart_rate.py)
+(so the CLI and Worker share it). The Worker maps it to HTTP 425 with a
+plain message ("Heart-rate data only runs to 18:42 UTC, but the workout ended
+at 18:51 UTC. Wait for the watch to sync and try again."). 409 stays reserved
+for Strava duplicates.
 
 The rule is `latest_sample >= end - SYNC_TOLERANCE`, with `end = start_time +
 elapsed_time` (no separate end field on `Workout`). `SYNC_TOLERANCE` is a
@@ -87,105 +112,40 @@ error, the window filter drops them.
 
 ### Domain
 
-Add to `Workout` in [domain.py](../../src/liftostrava/domain.py):
+`Workout.heart_rate: list[HeartRateSample]` (offset seconds, bpm), empty by
+default. Done in phase 2.
 
-```python
-@dataclass(frozen=True)
-class HeartRateSample:
-    offset_s: int  # seconds since workout start
-    bpm: int
+### Payload
 
-heart_rate: list[HeartRateSample] = field(default_factory=list)
-```
-
-Parsing and window filtering is a pure function (`heart_rate.py`), unit-tested.
-
-### FIT builder
-
-New `src/liftostrava/strava/fit.py`: pure Python (Workers only run
-pure-Python packages). Either a small hand-rolled encoder or Garmin's
-`garmin-fit-sdk` `Encoder`; see phase 3. Messages (the spike's set that
-Strava accepted):
-`file_id`, `event` (start/stop), `record` (timestamp + heart_rate) for each
-sample, `set` (category, exercise name, reps, weight, start time, duration)
-for each set, `lap`, `session` (sport = training, sub_sport = strength),
-`activity`; then CRC.
-
-`StravaClient.upload` picks the format: FIT when `workout.heart_rate` is
-non-empty, JSON otherwise. The form field `data_type` becomes `fit` (the
-filename keeps the random suffix to avoid Strava's external_id dedupe, see
-the comment in [client.py](../../src/liftostrava/strava/client.py)).
-
-### Exercise mapping (the biggest piece of work)
-
-`EXERCISE_TYPE_MAP` holds Strava JSON string values (for example
-`BARBELL_BACK_SQUAT`). FIT needs numeric `exercise_category` plus
-`exercise_name` from the FIT SDK profile. Plan: add a second table keyed by
-the same Liftosaur names, mapping to `(category, name)` ints, sourced from the
-FIT SDK `Profile.xlsx`. A test asserts every key in `EXERCISE_TYPE_MAP` has a
-FIT entry, so the two tables cannot drift. Unmapped exercises fall back to the
-category only (`unknown` name).
-
-### Set timing
-
-Liftosaur gives no per-set timestamps. Spread sets evenly across
-`elapsed_time` in order, using each set's share. Heart rate lines up by
-absolute time, so this only affects the per-set marks, not the graph.
+`build_payload` adds `"streams": {"time": [...], "heartrate": [...]}` when
+`workout.heart_rate` is non-empty. Same length, offsets non-decreasing,
+duplicate offsets collapsed (keep the last). Samples are about 5 seconds
+apart (about 500 per 45 minutes); if the upload size ever matters, thin
+them to at most one per 5 seconds.
 
 ## Phases
 
 Each phase ends with something runnable.
 
-1. **Spike (DONE).** Built one FIT file for the 11 Nov workout (12 sets,
-   509 fake heart-rate records) and uploaded it. **Result: go.** Strava
-   showed all 12 sets with correct names, weights, reps and per-set duration,
-   and the activity had heart rate (average 116, max 139, matching the fake
-   data). Findings:
-   - Exercise names on Strava come from the FIT enum (for example
-     `triceps_pressdown` renders "Triceps Pressdown"), so the numeric mapping
-     table in phase 3 is the real work.
-   - `private` is ignored on upload and on the activity update; the API
-     can't set it. Visibility follows the account default.
-   - Garmin's official `garmin-fit-sdk` (pure Python, FIT license) has an
-     `Encoder` and the profile enums, and produced a valid file first try.
-     Phase 3 should evaluate using it instead of a hand-rolled encoder:
-     check the license terms and that it installs in the Worker runtime.
-2. **Domain + parsing (about 1 hour).** `HeartRateSample`, parse/filter/
-   validate function, tests in `tests/liftostrava/test_heart_rate.py`.
-3. **FIT mapping spike, then encoder.**
-   - **3a. Mapping spike (about 1 hour, do first).** Checking
-     `EXERCISE_TYPE_MAP` against the FIT profile: 21 of 43 entries have an
-     exact FIT enum (for example `BARBELL_BACK_SQUAT` is squat/6), 22 do
-     not. Several are exercises in the current program: Leg Extension,
-     Seated Leg Curl, Hip Thrust (machine), Pallof Press, Hip Abductor/
-     Adductor machines, Skullcrusher, Incline Row, Pull Up, Lateral Raise.
-     Strava's JSON vocabulary is not the FIT vocabulary, and those JSON
-     values were verified to render correctly. Risk: FIT would regress them
-     to a generic/"Unknown" name. Upload one test FIT with the closest FIT
-     candidate (or category only) for each unmapped exercise and record how
-     Strava renders each. **Go/no-go:** if too many render badly, consider
-     keeping JSON when exercises are unmappable (and say so in the
-     response), or accept category-level names.
-   - **3b. Encoder + tests (about 3 hours).** Hand-rolled encoder
-     (`strava/fit.py`), with `garmin-fit-sdk` as a dev-only dependency for
-     round-trip decode in tests. Not a runtime dependency: its license
-     (Garmin FIT Protocol License) limits use to "internal business
-     purposes" and bars redistributing the SDK; implementing the protocol
-     ourselves is allowed. Mapping table as static ints with a test that
-     every `EXERCISE_TYPE_MAP` key has a FIT entry (or an explicit
-     fallback).
-4. **Upload + service (about 1 hour).** Format switch in `StravaClient`,
-   `preview_upload` support for `--dry-run` (summarise the FIT instead of
-   dumping bytes), tests with `responses`.
+1. **FIT spike (DONE).** Sets plus fake heart rate uploaded as FIT: worked,
+   but exercise vocabulary mismatch and licence made it the wrong route.
+2. **Domain + parsing (DONE).** `HeartRateSample`, `Workout.heart_rate`,
+   parse/filter/validate, `NotSyncedYet`, tests.
+3. **JSON streams spike (DONE).** Sets plus `streams.heartrate` in one JSON
+   upload: both showed up in Strava. Go.
+4. **Payload (about 1 hour).** `build_payload` adds `streams`; tests (shape,
+   equal lengths, duplicates, absent samples leave the payload unchanged).
+   `preview_upload` / `--dry-run` shows a summary of the streams (count,
+   first/last sample).
 5. **Worker + CLI (about 1.5 hours).** `handle_sync` reads optional
-   `heart_rate` and maps `NotSyncedYet` to HTTP 425; add `start`/`end` to the
-   compact workout list; CLI accepts `--heart-rate FILE.json`. Tests for:
+   `heart_rate` and maps `NotSyncedYet` to HTTP 425; add `start`/`end` to
+   the compact workout list; CLI accepts `--heart-rate FILE.json`. Tests for:
    absent field (unchanged behaviour), valid samples, garbage samples,
    samples outside the window, latest sample before the end
    (`NotSyncedYet`), empty samples. Add a dry-run check (CLI flag and a
    Worker option) that reports, without uploading: sample count, first and
-   last sample times, workout end, and whether the check passes. This is how
-   we tune `SYNC_TOLERANCE` and explain a `NotSyncedYet`.
+   last sample times, workout end, and whether the check passes. This is
+   how we tune `SYNC_TOLERANCE` and explain a `NotSyncedYet`.
 6. **Shortcut (about 1 hour).** Use the new `start`/`end` from the list for
    "Find Health Samples" (heart rate) and pass the result as `heart_rate`;
    show the 425 message to the user. Document in
@@ -197,13 +157,12 @@ Each phase ends with something runnable.
 
 | Risk | Mitigation |
 | --- | --- |
-| Strava may not render sets and heart rate together from one FIT | Phase 1 spike is the go/no-go gate |
-| FIT exercise enums do not cover every Liftosaur exercise | Category-level fallback; test that flags unmapped names |
-| Shortcut payload size / Shortcuts building JSON from samples | About 500 samples per 45 minutes (about 25 KB). Check how Shortcuts formats the sample list; if awkward, also accept CSV text `ISO,bpm` per line |
+| Shortcuts building the JSON sample list is fiddly | About 500 samples per 45 minutes (about 25 KB). Check how Shortcuts formats the sample list; if awkward, also accept CSV text `ISO,bpm` per line |
 | Samples not yet in Health when the Shortcut runs | `NotSyncedYet` (HTTP 425), nothing uploaded, so no duplicate to delete; retry later |
 | Heart rate legitimately stops before the workout end (watch removed, strap dropout) | Would raise `NotSyncedYet` forever; the Shortcut can omit `heart_rate` for a plain upload |
-| Worker runtime limits for FIT encoding | Encoding is a few KB of work; verify in the Docker runtime during phase 5 |
-| Workout times: Liftosaur `start_time` vs actual watch recording | Start/end tolerance, decide after spike |
+| Workout times: Liftosaur `start_time` vs actual watch recording | Window filter and tolerance; check with the dry-run output on real data |
+| Strava rejects or mis-renders streams for some payloads | Only one spike so far; test a real workout with real samples before release |
+| A push of this branch triggers a Cloudflare preview build whose preview command is `uv run pywrangler deploy` (a full deploy) | Change it to a versions upload, or turn off preview-branch builds, before pushing; `preview_urls = false` in `wrangler.toml` also needs deciding. Preview URLs sit outside Cloudflare Access, so the Worker would reject requests there anyway |
 
 Decisions:
 
@@ -211,12 +170,12 @@ Decisions:
    workout of yours ever fails the check, look at the dry-run output before
    raising it.
 2. **Override:** none. If the watch really has no data to the end, the
-   Shortcut omits `heart_rate` and gets the plain JSON upload (no heart
-   rate), which already works. No `allow_partial` flag.
+   Shortcut omits `heart_rate` and gets the plain upload (no heart rate),
+   which already works. No `allow_partial` flag.
 
 ## Testing
 
-- Unit: sample parsing/filtering, FIT encoding and CRC, mapping coverage.
-- Existing tests must pass untouched (JSON path unchanged).
-- Manual: sync the 11 Nov workout from the Shortcut after phase 6 and check
-  the Strava activity.
+- Unit: sample parsing/filtering, payload streams.
+- Existing tests must pass untouched (no-heart-rate path unchanged).
+- Manual: sync a real workout with real samples from the Shortcut after
+  phase 6 and check the Strava activity.
