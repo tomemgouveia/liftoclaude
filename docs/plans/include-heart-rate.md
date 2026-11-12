@@ -152,9 +152,28 @@ Each phase ends with something runnable.
      check the license terms and that it installs in the Worker runtime.
 2. **Domain + parsing (about 1 hour).** `HeartRateSample`, parse/filter/
    validate function, tests in `tests/liftostrava/test_heart_rate.py`.
-3. **FIT encoder + mapping (about 4 hours).** `strava/fit.py`, the FIT
-   exercise table, tests (round-trip decode in tests against a minimal
-   reader, CRC check, mapping coverage).
+3. **FIT mapping spike, then encoder.**
+   - **3a. Mapping spike (about 1 hour, do first).** Checking
+     `EXERCISE_TYPE_MAP` against the FIT profile: 21 of 43 entries have an
+     exact FIT enum (for example `BARBELL_BACK_SQUAT` is squat/6), 22 do
+     not. Several are exercises in the current program: Leg Extension,
+     Seated Leg Curl, Hip Thrust (machine), Pallof Press, Hip Abductor/
+     Adductor machines, Skullcrusher, Incline Row, Pull Up, Lateral Raise.
+     Strava's JSON vocabulary is not the FIT vocabulary, and those JSON
+     values were verified to render correctly. Risk: FIT would regress them
+     to a generic/"Unknown" name. Upload one test FIT with the closest FIT
+     candidate (or category only) for each unmapped exercise and record how
+     Strava renders each. **Go/no-go:** if too many render badly, consider
+     keeping JSON when exercises are unmappable (and say so in the
+     response), or accept category-level names.
+   - **3b. Encoder + tests (about 3 hours).** Hand-rolled encoder
+     (`strava/fit.py`), with `garmin-fit-sdk` as a dev-only dependency for
+     round-trip decode in tests. Not a runtime dependency: its license
+     (Garmin FIT Protocol License) limits use to "internal business
+     purposes" and bars redistributing the SDK; implementing the protocol
+     ourselves is allowed. Mapping table as static ints with a test that
+     every `EXERCISE_TYPE_MAP` key has a FIT entry (or an explicit
+     fallback).
 4. **Upload + service (about 1 hour).** Format switch in `StravaClient`,
    `preview_upload` support for `--dry-run` (summarise the FIT instead of
    dumping bytes), tests with `responses`.
