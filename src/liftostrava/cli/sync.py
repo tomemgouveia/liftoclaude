@@ -33,13 +33,15 @@ import asyncio
 import json
 import os
 import sys
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 from liftostrava.cli import config
 from liftostrava.cli.env_store import EnvFileTokenStore
 from liftostrava.domain import Workout
-from liftostrava.errors import MissingCredentials
+from liftostrava.errors import MissingCredentials, NotSyncedYet
+from liftostrava.heart_rate import coverage_report, with_heart_rate
 from liftostrava.liftosaur.client import LiftosaurClient
 from liftostrava.liftosaur.mcp_export import load_workout
 from liftostrava.service import SyncService, preview_upload
@@ -64,6 +66,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Don't mute the activity from home feed "
         "(default: muted). This does NOT make it "
         "fully public — see module docstring.",
+    )
+    parser.add_argument(
+        "--heart-rate",
+        metavar="FILE.json",
+        type=Path,
+        help='JSON list of {"time": ISO 8601, "bpm": int} samples '
+        "(for example exported from Apple Health) to add as a heart-rate "
+        "stream. Fails if they don't cover the workout; with --dry-run it "
+        "reports what it found.",
     )
     parser.add_argument(
         "--dry-run",
@@ -106,6 +117,21 @@ def main() -> None:
     try:
         workout = load_input(args)
 
+        if args.heart_rate:
+            raw_samples = json.loads(args.heart_rate.read_text())
+            if args.dry_run:
+                print("Heart-rate coverage check:")
+                print(
+                    json.dumps(
+                        coverage_report(
+                            raw_samples, workout.start_time, workout.elapsed_time
+                        ),
+                        indent=2,
+                    )
+                )
+                print()
+            workout = with_heart_rate(workout, raw_samples)
+
         if args.dry_run:
             print("Would upload the following to Strava (--dry-run, nothing sent):\n")
             print(
@@ -121,7 +147,7 @@ def main() -> None:
             progress=print,
         )
         result = asyncio.run(service.sync(workout, hide_from_home))
-    except MissingCredentials as e:
+    except (MissingCredentials, NotSyncedYet) as e:
         print(e)
         sys.exit(1)
 

@@ -137,7 +137,7 @@ Each phase ends with something runnable.
    equal lengths, duplicates, absent samples leave the payload unchanged).
    `preview_upload` / `--dry-run` shows a summary of the streams (count,
    first/last sample).
-5. **Worker + CLI (about 1.5 hours).** `handle_sync` reads optional
+5. **Worker + CLI (DONE; `handle_sync` itself is only compile-checked, test it in the local runtime).** `handle_sync` reads optional
    `heart_rate` and maps `NotSyncedYet` to HTTP 425; add `start`/`end` to
    the compact workout list; CLI accepts `--heart-rate FILE.json`. Tests for:
    absent field (unchanged behaviour), valid samples, garbage samples,

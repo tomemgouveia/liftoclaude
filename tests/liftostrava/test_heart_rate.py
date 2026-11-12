@@ -1,11 +1,13 @@
 import pytest
 
-from liftostrava.domain import HeartRateSample
+from liftostrava.domain import Exercise, HeartRateSample, Set, Workout
 from liftostrava.errors import NotSyncedYet
 from liftostrava.heart_rate import (
+    coverage_report,
     parse_iso,
     samples_for_workout,
     window_samples,
+    with_heart_rate,
     workout_end,
 )
 
@@ -107,3 +109,36 @@ def test_samples_after_the_end_are_ignored_not_an_error():
 def test_no_samples_is_not_synced():
     with pytest.raises(NotSyncedYet, match="No heart-rate samples"):
         samples_for_workout([], START, ELAPSED)
+
+
+def test_with_heart_rate_attaches_samples_to_the_workout():
+    workout = Workout(START, ELAPSED, [Exercise("Squat", [Set(5, 100.0)])])
+    raw = [sample("2026-11-11T17:46:00Z", 99), sample("2026-11-11T17:55:00Z", 110)]
+    result = with_heart_rate(workout, raw)
+    assert [s.bpm for s in result.heart_rate] == [99, 110]
+    assert workout.heart_rate == []  # original untouched
+
+
+def test_with_heart_rate_raises_when_not_synced():
+    workout = Workout(START, ELAPSED, [])
+    with pytest.raises(NotSyncedYet):
+        with_heart_rate(workout, [sample("2026-11-11T17:46:00Z")])
+
+
+def test_coverage_report_describes_what_the_check_sees():
+    raw = [sample("2026-11-11T17:46:00Z"), sample("2026-11-11T17:50:00Z"), "junk"]
+    assert coverage_report(raw, START, ELAPSED) == {
+        "samples_in_window": 2,
+        "first_sample": "2026-11-11T17:46:00Z",
+        "last_sample": "2026-11-11T17:50:00Z",
+        "workout_start": "2026-11-11T17:45:17Z",
+        "workout_end": "2026-11-11T17:55:17Z",
+        "covers_workout": False,
+    }
+
+
+def test_coverage_report_with_no_samples():
+    report = coverage_report([], START, ELAPSED)
+    assert report["samples_in_window"] == 0
+    assert report["first_sample"] is None
+    assert report["covers_workout"] is False

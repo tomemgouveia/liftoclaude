@@ -2,9 +2,10 @@
 the samples a Workout carries, and checking they cover the workout. Pure
 functions: no I/O, so the CLI and the Worker share them."""
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
-from liftostrava.domain import HeartRateSample
+from liftostrava.domain import HeartRateSample, Workout
 from liftostrava.errors import NotSyncedYet
 
 # The latest sample may fall this long before the workout's end (the watch
@@ -78,3 +79,35 @@ def samples_for_workout(
             f"ended at {end:%H:%M} UTC. Wait for the watch to sync and try again."
         )
     return samples
+
+
+def with_heart_rate(workout: Workout, raw_samples: object) -> Workout:
+    """The workout with its heart-rate samples attached, or NotSyncedYet."""
+    return replace(
+        workout,
+        heart_rate=samples_for_workout(
+            raw_samples, workout.start_time, workout.elapsed_time
+        ),
+    )
+
+
+def coverage_report(raw_samples: object, start_time: str, elapsed_time: int) -> dict:
+    """What the coverage check sees, without raising: for dry runs and for
+    explaining a NotSyncedYet."""
+    samples = window_samples(raw_samples, start_time, elapsed_time)
+    start = parse_iso(start_time)
+    end = workout_end(start_time, elapsed_time)
+    first = start + timedelta(seconds=samples[0].offset_s) if samples else None
+    last = start + timedelta(seconds=samples[-1].offset_s) if samples else None
+    return {
+        "samples_in_window": len(samples),
+        "first_sample": format_utc(first) if first else None,
+        "last_sample": format_utc(last) if last else None,
+        "workout_start": format_utc(start),
+        "workout_end": format_utc(end),
+        "covers_workout": last is not None and last >= end - SYNC_TOLERANCE,
+    }
+
+
+def format_utc(moment: datetime) -> str:
+    return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")

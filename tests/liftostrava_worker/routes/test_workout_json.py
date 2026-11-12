@@ -1,4 +1,4 @@
-def test_workout_json_brief_is_id_name_date_only():
+def test_workout_json_brief_is_id_name_date_and_window():
     from liftostrava.domain import Exercise, Set, Workout, WorkoutRecord
     from liftostrava_worker.routes.workout_json import workout_json
 
@@ -16,6 +16,8 @@ def test_workout_json_brief_is_id_name_date_only():
         "id": "42",
         "name": "Lower Body Workout",
         "date": "2026-10-31",
+        "start": "2026-10-31T09:00:00Z",
+        "end": "2026-10-31T10:00:00Z",
     }
     full = workout_json(entry, brief=False)
     assert full["duration_s"] == 3600

@@ -61,13 +61,21 @@ The Worker's JSON API:
 - `GET /api/workouts?start=YYYY-MM-DD&end=YYYY-MM-DD` lists workouts, newest
   first. Both bounds are inclusive days in the user's timezone and default to
   the last 7 days.
-- `POST /api/sync` with `{"workout_id": "..."}` syncs one workout.
+- `POST /api/sync` with `{"workout_id": "..."}` syncs one workout. Add
+  `"heart_rate": [{"time": "<ISO 8601 with offset>", "bpm": 120}, ...]` to
+  upload it with a heart-rate stream. The Worker keeps samples inside the
+  workout's window and replies `425` ("not synced yet", nothing uploaded)
+  if they stop more than 60 seconds before the workout ends or there are
+  none. Omit `heart_rate` for the plain upload. Add `"dry_run": true` (with
+  `heart_rate`) to get a JSON report of what the check saw, without
+  uploading.
 - `GET`/`POST /api/settings` read and save the signed-in user's Liftosaur key
   and timezone for the `/connect` page. `/connect/strava` and
   `/connect/strava/callback` remain server-side OAuth redirects.
 
 `GET /` (without `Accept: text/html`) and `POST /` still work for Shortcuts.
-`GET /` returns the compact `{id, name, date}` list; add `?brief=1` to
+`GET /` returns the compact `{id, name, date, start, end}` list (`start` and
+`end` are the workout window in UTC, for querying Apple Health); add `?brief=1` to
 `/api/workouts` for the same compact shape with a date range.
 
 ## Access authentication for users and Shortcuts
