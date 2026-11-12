@@ -103,6 +103,13 @@ samples along with the workout id. Without a "Repeat with each" loop:
 5. A `425` means the samples stop more than 60 seconds before the workout
    ends (usually the watch has not synced yet); nothing was uploaded.
 
+Heart rate only lands densely in Apple Health while the Watch is recording a
+workout session. Outside one, the Watch logs a sample every few minutes, so
+the workout window has gaps or stops early, and the Worker answers `425`
+every time, however long you wait. Start a workout on the Watch (for
+example Strength Training) before lifting, or omit `heart_rate` to sync the
+workout without it.
+
 ## Access authentication for users and Shortcuts
 
 The Worker verifies the `Cf-Access-Jwt-Assertion` header. For a human Access
