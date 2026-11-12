@@ -81,6 +81,28 @@ The Worker's JSON API:
 `end` are the workout window in UTC, for querying Apple Health); add `?brief=1` to
 `/api/workouts` for the same compact shape with a date range.
 
+## Heart rate from a Shortcut
+
+To add heart rate to a synced workout, the Shortcut sends the Apple Health
+samples along with the workout id. Without a "Repeat with each" loop:
+
+1. `GET /` and pick a workout. Each item has `start` and `end` (UTC).
+2. "Find Health Samples" (Type = Heart Rate). Filtering to the workout's
+   window keeps the request small; the Worker also filters, so sending a
+   wider range works.
+3. `POST /api/sync` with a JSON body: `workout_id` (text) and `heart_rate`
+   (a dictionary) with `time` set to the samples' **Start Date** and `bpm`
+   set to the **Health Samples** themselves, both as plain variables. Do not
+   use "Get Details of Health Samples" for these: its output arrived empty.
+   Shortcuts turns each list into text with one value per line, which the
+   Worker reads (dates as ISO 8601 such as `2026-11-12T08:47:34Z`).
+4. Add `"dry_run": true` first. The response reports `received`,
+   `unreadable` (with examples), `samples_in_window`, first and last sample,
+   the workout's start and end, `covers_workout`, and `shape` (the types and
+   lengths of what arrived, never the values).
+5. A `425` means the samples stop more than 60 seconds before the workout
+   ends (usually the watch has not synced yet); nothing was uploaded.
+
 ## Access authentication for users and Shortcuts
 
 The Worker verifies the `Cf-Access-Jwt-Assertion` header. For a human Access
