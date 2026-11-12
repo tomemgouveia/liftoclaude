@@ -102,8 +102,10 @@ Parsing and window filtering is a pure function (`heart_rate.py`), unit-tested.
 
 ### FIT builder
 
-New `src/liftostrava/strava/fit.py`: pure Python, no dependencies (Workers
-only run pure-Python packages, and the FIT binary format is small). Messages:
+New `src/liftostrava/strava/fit.py`: pure Python (Workers only run
+pure-Python packages). Either a small hand-rolled encoder or Garmin's
+`garmin-fit-sdk` `Encoder`; see phase 3. Messages (the spike's set that
+Strava accepted):
 `file_id`, `event` (start/stop), `record` (timestamp + heart_rate) for each
 sample, `set` (category, exercise name, reps, weight, start time, duration)
 for each set, `lap`, `session` (sport = training, sub_sport = strength),
@@ -134,12 +136,20 @@ absolute time, so this only affects the per-set marks, not the graph.
 
 Each phase ends with something runnable.
 
-1. **Spike (about 1 hour, do first).** Script (not committed to `src/`) that
-   builds one FIT file by hand for the 11 Nov workout with fake heart-rate
-   samples and uploads it to Strava.
-   **Go/no-go:** the activity must show named exercises/sets and a heart-rate
-   graph. If Strava drops the sets or the heart rate, stop and rethink
-   (fallback options: TCX with heart rate only, losing sets; or keep JSON).
+1. **Spike (DONE).** Built one FIT file for the 11 Nov workout (12 sets,
+   509 fake heart-rate records) and uploaded it. **Result: go.** Strava
+   showed all 12 sets with correct names, weights, reps and per-set duration,
+   and the activity had heart rate (average 116, max 139, matching the fake
+   data). Findings:
+   - Exercise names on Strava come from the FIT enum (for example
+     `triceps_pressdown` renders "Triceps Pressdown"), so the numeric mapping
+     table in phase 3 is the real work.
+   - `private` is ignored on upload and on the activity update; the API
+     can't set it. Visibility follows the account default.
+   - Garmin's official `garmin-fit-sdk` (pure Python, FIT license) has an
+     `Encoder` and the profile enums, and produced a valid file first try.
+     Phase 3 should evaluate using it instead of a hand-rolled encoder:
+     check the license terms and that it installs in the Worker runtime.
 2. **Domain + parsing (about 1 hour).** `HeartRateSample`, parse/filter/
    validate function, tests in `tests/liftostrava/test_heart_rate.py`.
 3. **FIT encoder + mapping (about 4 hours).** `strava/fit.py`, the FIT
