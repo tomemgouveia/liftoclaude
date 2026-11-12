@@ -67,9 +67,10 @@ The Worker's JSON API:
   parallel lists of equal length, `"heart_rate": {"time": [...], "bpm": [...]}`,
   which avoids a "Repeat with each" loop. A `bpm` given as text such as
   `"72 count/min"` is read by its leading number. The Worker keeps samples inside the
-  workout's window and replies `425` ("not synced yet", nothing uploaded)
-  if they stop more than 60 seconds before the workout ends or there are
-  none. Omit `heart_rate` for the plain upload. Add `"dry_run": true` (with
+  workout's window. If there are none, it uploads the workout without heart
+  rate and says so. If there are some but they stop more than 60 seconds
+  before the workout ends, it replies `425` ("not synced yet", nothing
+  uploaded). Omit `heart_rate` for the plain upload. Add `"dry_run": true` (with
   `heart_rate`) to get a JSON report of what the check saw (including how
   many items were unreadable, with examples), without uploading.
 - `GET`/`POST /api/settings` read and save the signed-in user's Liftosaur key
@@ -100,13 +101,15 @@ samples along with the workout id. Without a "Repeat with each" loop:
    `unreadable` (with examples), `samples_in_window`, first and last sample,
    the workout's start and end, `covers_workout`, and `shape` (the types and
    lengths of what arrived, never the values).
-5. A `425` means the samples stop more than 60 seconds before the workout
-   ends (usually the watch has not synced yet); nothing was uploaded.
+5. A `425` means some samples exist but stop more than 60 seconds before the
+   workout ends (usually the watch has not finished syncing); nothing was
+   uploaded. No samples at all uploads the workout without heart rate.
 
 Heart rate only lands densely in Apple Health while the Watch is recording a
 workout session. Outside one, the Watch logs a sample every few minutes, so
 the workout window has gaps or stops early, and the Worker answers `425`
-every time, however long you wait. Start a workout on the Watch (for
+every time, however long you wait (if there are no samples at all, it uploads
+without heart rate). Start a workout on the Watch (for
 example Strength Training) before lifting, or omit `heart_rate` to sync the
 workout without it.
 

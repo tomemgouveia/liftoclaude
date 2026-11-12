@@ -131,6 +131,8 @@ def main() -> None:
                 )
                 print()
             workout = with_heart_rate(workout, raw_samples)
+            if not workout.heart_rate:
+                print("No heart-rate samples in the workout window; none attached.")
 
         if args.dry_run:
             print("Would upload the following to Strava (--dry-run, nothing sent):\n")

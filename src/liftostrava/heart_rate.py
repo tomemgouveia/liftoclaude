@@ -117,15 +117,14 @@ def window_samples(
 def samples_for_workout(
     raw_samples: object, start_time: str, elapsed_time: int
 ) -> list[HeartRateSample]:
-    """The samples to upload, or NotSyncedYet if they stop more than
-    SYNC_TOLERANCE before the workout's end (or there are none)."""
+    """The samples to upload. Empty when there are none in the workout's
+    window (nothing recorded: the caller uploads without heart rate), and
+    NotSyncedYet when some exist but stop more than SYNC_TOLERANCE before
+    the workout's end (recorded, but not all of it has arrived yet)."""
     samples = window_samples(raw_samples, start_time, elapsed_time)
-    end = workout_end(start_time, elapsed_time)
     if not samples:
-        raise NotSyncedYet(
-            f"No heart-rate samples found for the workout, which ended at "
-            f"{end:%H:%M} UTC. Wait for the watch to sync and try again."
-        )
+        return []
+    end = workout_end(start_time, elapsed_time)
     last = parse_iso(start_time) + timedelta(seconds=samples[-1].offset_s)
     if last < end - SYNC_TOLERANCE:
         raise NotSyncedYet(
@@ -136,7 +135,8 @@ def samples_for_workout(
 
 
 def with_heart_rate(workout: Workout, raw_samples: object) -> Workout:
-    """The workout with its heart-rate samples attached, or NotSyncedYet."""
+    """The workout with its heart-rate samples attached (none if there are
+    no samples in its window), or NotSyncedYet if they stop early."""
     return replace(
         workout,
         heart_rate=samples_for_workout(

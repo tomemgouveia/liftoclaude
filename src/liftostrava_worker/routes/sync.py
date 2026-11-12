@@ -69,7 +69,12 @@ async def handle_sync(
         )
         await service.sync(workout)
 
-        return Response(f"Uploaded to Strava: {workout.name}!")
+        note = (
+            " (no heart-rate samples in the workout window, so none attached)"
+            if has_heart_rate and not workout.heart_rate
+            else ""
+        )
+        return Response(f"Uploaded to Strava: {workout.name}!{note}")
 
     except NotSyncedYet as e:
         # 425, not 409: 409 means Strava already has the workout.

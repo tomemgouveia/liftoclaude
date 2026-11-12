@@ -107,9 +107,13 @@ def test_samples_after_the_end_are_ignored_not_an_error():
     assert [s.offset_s for s in samples_for_workout(raw, START, ELAPSED)] == [583]
 
 
-def test_no_samples_is_not_synced():
-    with pytest.raises(NotSyncedYet, match="No heart-rate samples"):
-        samples_for_workout([], START, ELAPSED)
+def test_no_samples_returns_empty_so_the_workout_uploads_without_heart_rate():
+    assert samples_for_workout([], START, ELAPSED) == []
+
+
+def test_only_samples_outside_the_window_count_as_none():
+    raw = [sample("2026-11-11T17:00:00Z"), sample("2026-11-11T19:00:00Z")]
+    assert samples_for_workout(raw, START, ELAPSED) == []
 
 
 def test_with_heart_rate_attaches_samples_to_the_workout():
@@ -118,6 +122,11 @@ def test_with_heart_rate_attaches_samples_to_the_workout():
     result = with_heart_rate(workout, raw)
     assert [s.bpm for s in result.heart_rate] == [99, 110]
     assert workout.heart_rate == []  # original untouched
+
+
+def test_with_heart_rate_and_no_samples_leaves_the_workout_without_any():
+    workout = Workout(START, ELAPSED, [])
+    assert with_heart_rate(workout, []).heart_rate == []
 
 
 def test_with_heart_rate_raises_when_not_synced():

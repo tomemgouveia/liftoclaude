@@ -90,7 +90,10 @@ their meaning stay, so the current Shortcut is unaffected.
 - **Field present:** the Worker takes the heart-rate path and does not fall
   back silently. Samples are filtered to the workout window; invalid ones
   (non-numeric, bpm outside 30-240, unparseable or naive time) are dropped.
-  - Empty after filtering, or latest sample earlier than `end` minus
+  - No samples left after filtering: upload the workout without heart rate
+    (the plain payload) and say so in the response. Changed after testing:
+    a workout with nothing recorded should still sync.
+  - Some samples, but the latest is earlier than `end` minus
     `SYNC_TOLERANCE`: respond with `NotSyncedYet`, upload nothing. The user
     can run the Shortcut again once the watch has synced.
   - Otherwise: build the payload with `streams` and upload.
