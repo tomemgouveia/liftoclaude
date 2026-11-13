@@ -278,8 +278,8 @@ dev = [
     { name = "pytest", specifier = ">=9.0" },
     { name = "responses", specifier = ">=0.26" },
     { name = "ruff", specifier = ">=0.16" },
-    { name = "workers-py" },
-    { name = "workers-runtime-sdk" },
+    { name = "workers-py", specifier = "==1.17.9" },
+    { name = "workers-runtime-sdk", specifier = "==1.9.5" },
 ]
 
 [[package]]
