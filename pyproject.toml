@@ -11,7 +11,7 @@ dependencies = ["requests>=2.31.0", "python-dotenv>=1.0.0", "tzdata>=2025.2"]
 
 [dependency-groups]
 dev = [
-    "workers-py==1.17.9",
+    "workers-py==1.16.0",
     "workers-runtime-sdk==1.9.5",
     "pytest>=9.0",
     "responses>=0.26",
