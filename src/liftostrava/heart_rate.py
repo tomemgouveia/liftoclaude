@@ -115,18 +115,23 @@ def window_samples(
 
 
 def samples_for_workout(
-    raw_samples: object, start_time: str, elapsed_time: int
+    raw_samples: object,
+    start_time: str,
+    elapsed_time: int,
+    *,
+    allow_partial: bool = False,
 ) -> list[HeartRateSample]:
     """The samples to upload. Empty when there are none in the workout's
     window (nothing recorded: the caller uploads without heart rate), and
     NotSyncedYet when some exist but stop more than SYNC_TOLERANCE before
-    the workout's end (recorded, but not all of it has arrived yet)."""
+    the workout's end (recorded, but not all of it has arrived yet), unless
+    `allow_partial` is set: then the partial samples are returned as-is."""
     samples = window_samples(raw_samples, start_time, elapsed_time)
     if not samples:
         return []
     end = workout_end(start_time, elapsed_time)
     last = parse_iso(start_time) + timedelta(seconds=samples[-1].offset_s)
-    if last < end - SYNC_TOLERANCE:
+    if last < end - SYNC_TOLERANCE and not allow_partial:
         raise NotSyncedYet(
             f"Heart-rate data only runs to {last:%H:%M} UTC, but the workout "
             f"ended at {end:%H:%M} UTC. Wait for the watch to sync and try again."
@@ -134,13 +139,19 @@ def samples_for_workout(
     return samples
 
 
-def with_heart_rate(workout: Workout, raw_samples: object) -> Workout:
+def with_heart_rate(
+    workout: Workout, raw_samples: object, *, allow_partial: bool = False
+) -> Workout:
     """The workout with its heart-rate samples attached (none if there are
-    no samples in its window), or NotSyncedYet if they stop early."""
+    no samples in its window), or NotSyncedYet if they stop early and
+    `allow_partial` is not set."""
     return replace(
         workout,
         heart_rate=samples_for_workout(
-            raw_samples, workout.start_time, workout.elapsed_time
+            raw_samples,
+            workout.start_time,
+            workout.elapsed_time,
+            allow_partial=allow_partial,
         ),
     )
 

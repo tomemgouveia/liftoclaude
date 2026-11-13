@@ -206,3 +206,17 @@ def test_describe_shape_shows_types_and_lengths_not_values():
         "x": "int",
     }
     assert describe_shape(None) == "NoneType"
+
+
+def test_allow_partial_returns_samples_that_stop_early():
+    raw = [sample("2026-11-11T17:46:00Z"), sample("2026-11-11T17:54:16Z")]
+    result = samples_for_workout(raw, START, ELAPSED, allow_partial=True)
+    assert len(result) == 2
+
+
+def test_with_heart_rate_allow_partial_attaches_early_stopping_samples():
+    workout = Workout(START, ELAPSED, [])
+    result = with_heart_rate(
+        workout, [sample("2026-11-11T17:46:00Z")], allow_partial=True
+    )
+    assert len(result.heart_rate) == 1
