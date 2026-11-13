@@ -35,6 +35,9 @@ async def handle_sync(
             status=400,
         )
     dry_run = body.get("dry_run") is True
+    # Push even if the heart-rate data stops before the workout ends.
+    # Default (absent/false): block with 425 until the watch has synced.
+    override = body.get("override") is True
     if dry_run and not has_heart_rate:
         return Response("'dry_run' needs 'heart_rate'", status=400)
 
@@ -60,7 +63,9 @@ async def handle_sync(
                 )
             )
         if has_heart_rate:
-            workout = with_heart_rate(workout, body["heart_rate"])
+            workout = with_heart_rate(
+                workout, body["heart_rate"], allow_partial=override
+            )
 
         # Strava's local-time display needs the user's own timezone.
         tz = ZoneInfo(user.timezone) if user.timezone else DEFAULT_TIMEZONE

@@ -70,7 +70,8 @@ The Worker's JSON API:
   workout's window. If there are none, it uploads the workout without heart
   rate and says so. If there are some but they stop more than 60 seconds
   before the workout ends, it replies `425` ("not synced yet", nothing
-  uploaded). Omit `heart_rate` for the plain upload. Add `"dry_run": true` (with
+  uploaded); add `"override": true` to upload with the partial heart rate
+  anyway (only `true` counts; the default is to block). Omit `heart_rate` for the plain upload. Add `"dry_run": true` (with
   `heart_rate`) to get a JSON report of what the check saw (including how
   many items were unreadable, with examples), without uploading.
 - `GET`/`POST /api/settings` read and save the signed-in user's Liftosaur key
